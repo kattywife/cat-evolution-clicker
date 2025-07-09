@@ -1,49 +1,80 @@
 using UnityEngine;
+using UnityEngine.UI;
 using TMPro;
+using System.Collections.Generic;
 
 public class GameManager : MonoBehaviour
 {
-    // --- Переменные для геймплея ---
+    // --- ДАННЫЕ ИГРЫ (МОДЕЛЬ) ---
+    [Header("Настройки уровней")]
+    public List<LevelData> levels; // Список всех наших уровней (перетащим сюда ассеты)
+    private int currentLevelIndex = 0;
+
+    // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
+    [Header("Текущее состояние")]
     public double score = 0;
 
-    // --- Ссылки на объекты на сцене ---
-    public TextMeshProUGUI scoreText; // Сюда перетаскиваем текст для счета
-    public Transform catTransform;    // Сюда перетаскиваем котика
+    // --- ССЫЛКИ НА UI (ПРЕДСТАВЛЕНИЕ) ---
+    [Header("Ссылки на UI элементы")]
+    public TextMeshProUGUI scoreText;
+    public Image catImage; // ИЗМЕНЕНИЕ: теперь ссылка на Image, а не Transform
 
-    // Этот метод вызывается при клике на котика
+    // Start вызывается один раз при запуске игры
+    void Start()
+    {
+        // Устанавливаем начальные значения
+        score = 0;
+        currentLevelIndex = 0;
+        ApplyLevelUp(); // Применяем спрайт самого первого уровня
+        UpdateScoreText();
+    }
+
     public void OnCatClicked()
     {
-        // Добавляем тестовое сообщение в консоль, чтобы убедиться, что клик работает
-        Debug.Log("Клик по котику! Текущий счет: " + score);
-
-        // Увеличиваем счет на 1
-        score = score + 1;
-
-        // Обновляем текст на экране
+        score++;
         UpdateScoreText();
+        CheckForLevelUp();
 
-        // Анимация клика: немного увеличиваем котика
-        catTransform.localScale = new Vector3(1.1f, 1.1f, 1f); // Чуть больше исходного размера
-
-        // Через 0.1 секунды вызываем метод, чтобы вернуть размер обратно
+        // Анимация клика
+        catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
         Invoke("ResetCatScale", 0.1f);
     }
 
-    // Этот метод возвращает котика к его обычному размеру
-    private void ResetCatScale()
+    private void CheckForLevelUp()
     {
-        // Убедись, что здесь указан твой исходный размер котика!
-        // Если ты его меняла, подставь свои значения. 5.3316 - это с твоего скриншота.
-        catTransform.localScale = new Vector3(1f, 1f, 1f);
+        // Проверяем, не последний ли это уровень
+        if (currentLevelIndex + 1 >= levels.Count)
+        {
+            return; // Мы уже на максимальном уровне, выходим
+        }
+
+        // Проверяем, набрали ли мы достаточно очков для СЛЕДУЮЩЕГО уровня
+        if (score >= levels[currentLevelIndex + 1].scoreToReach)
+        {
+            currentLevelIndex++; // Повышаем уровень
+            ApplyLevelUp(); // Применяем изменения
+        }
     }
 
-    // Этот метод обновляет текст счета на экране
+    private void ApplyLevelUp()
+    {
+        // Получаем данные текущего уровня
+        LevelData currentLevel = levels[currentLevelIndex];
+
+        // Меняем спрайт котика
+        catImage.sprite = currentLevel.catSprite;
+    }
+
+    private void ResetCatScale()
+    {
+        catImage.transform.localScale = new Vector3(1f, 1f, 1f);
+    }
+
     private void UpdateScoreText()
     {
-        // Проверяем, что ссылка на текст не пустая, чтобы избежать ошибок
         if (scoreText != null)
         {
-            scoreText.text = score.ToString("F0"); // "F0" означает показать число без запятых
+            scoreText.text = score.ToString("F0");
         }
     }
 }
