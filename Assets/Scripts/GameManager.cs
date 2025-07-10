@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 
+
 public class GameManager : MonoBehaviour
 {
     // --- ДАННЫЕ ИГРЫ (МОДЕЛЬ) ---
@@ -62,8 +63,11 @@ public class GameManager : MonoBehaviour
 
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
+        Debug.Log(">>> GameManager получил запрос на покупку: " + upgrade.upgradeName + " <<<"); // ЛОВУШКА 5
+
         if (score >= cost)
         {
+            Debug.Log("$$$ Денег хватает! Покупаем! $$$"); // ЛОВУШКА 6
             score -= cost;
             if (upgrade.type == UpgradeType.PerClick)
             {
@@ -74,8 +78,11 @@ public class GameManager : MonoBehaviour
                 scorePerSecond += upgrade.power;
             }
 
-            // Сообщаем кнопке, что покупка совершена
             button.OnPurchaseSuccess();
+        }
+        else
+        {
+            Debug.Log("!!! Денег не хватает. Нужно " + cost + ", а у меня только " + score); // ЛОВУШКА 7
         }
     }
 
@@ -83,12 +90,13 @@ public class GameManager : MonoBehaviour
 
     private void CreateShop()
     {
+        Debug.Log("--- Начинаю создавать магазин. Улучшений в списке: " + upgrades.Count + " ---"); // ЛОВУШКА 2
+
         foreach (var upgrade in upgrades)
         {
-            // Создаем копию префаба
             GameObject newButton = Instantiate(upgradeButtonPrefab, shopPanel);
-            // Получаем ее скрипт и настраиваем
-            newButton.GetComponent<UpgradeButtonUI>().Setup(upgrade, this); // Передаем данные и ссылку на себя
+            Debug.Log("Создаю кнопку для: " + upgrade.upgradeName); // ЛОВУШКА 3
+            newButton.GetComponent<UpgradeButtonUI>().Setup(upgrade, this);
         }
     }
 

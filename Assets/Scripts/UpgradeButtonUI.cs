@@ -1,8 +1,10 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.EventSystems;
 
-public class UpgradeButtonUI : MonoBehaviour
+
+public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
 {
     [Header("UI Elements")]
     public TextMeshProUGUI nameText;
@@ -14,7 +16,13 @@ public class UpgradeButtonUI : MonoBehaviour
     private UpgradeData currentUpgradeData;
     private int currentLevel = 0;
     private double currentCost = 0;
-    private GameManager gameManager; // Ссылка на главный скрипт
+    private GameManager gameManager;
+    private Vector3 originalScale;
+
+    void Awake()
+    {
+        originalScale = transform.localScale;
+    }
 
     public void Setup(UpgradeData data, GameManager manager)
     {
@@ -23,13 +31,33 @@ public class UpgradeButtonUI : MonoBehaviour
         currentLevel = 0;
         currentCost = currentUpgradeData.baseCost;
 
+        purchaseButton.onClick.RemoveAllListeners();
         purchaseButton.onClick.AddListener(OnPurchaseClicked);
-        UpdateUI();
+
+        UpdateUI(); // Правильный вызов
     }
 
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        OnPurchaseClicked();
+    }
+
+    public void OnPurchaseClicked()
+    {
+        gameManager.PurchaseUpgrade(currentUpgradeData, currentCost, this);
+    }
+
+    public void OnPurchaseSuccess()
+    {
+        currentLevel++;
+        currentCost *= currentUpgradeData.costMultiplier;
+        UpdateUI(); // Правильный вызов
+    }
+
+    // Вот правильное объявление метода
     public void UpdateUI()
     {
-        nameText.text = $"{currentUpgradeData.upgradeName} (Ур. {currentLevel})";
+        nameText.text = currentUpgradeData.upgradeName; // Убрали (Ур. 0)
         iconImage.sprite = currentUpgradeData.icon;
         priceText.text = FormatNumber(currentCost);
 
@@ -38,21 +66,17 @@ public class UpgradeButtonUI : MonoBehaviour
         else if (currentUpgradeData.type == UpgradeType.PerSecond)
             effectText.text = $"+{currentUpgradeData.power} в секунду";
 
-        // Проверяем, можем ли мы позволить себе покупку, и меняем состояние кнопки
         purchaseButton.interactable = gameManager.score >= currentCost;
     }
 
-    private void OnPurchaseClicked()
+    public void OnPointerEnter(PointerEventData eventData)
     {
-        gameManager.PurchaseUpgrade(currentUpgradeData, currentCost, this);
+        transform.localScale = originalScale * 1.1f;
     }
 
-    // Этот метод вызовет GameManager после успешной покупки
-    public void OnPurchaseSuccess()
+    public void OnPointerExit(PointerEventData eventData)
     {
-        currentLevel++;
-        currentCost *= currentUpgradeData.costMultiplier;
-        UpdateUI();
+        transform.localScale = originalScale;
     }
 
     private string FormatNumber(double number)
