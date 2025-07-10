@@ -3,7 +3,6 @@ using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
 
-
 public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
 {
     [Header("UI Elements")]
@@ -34,12 +33,48 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         purchaseButton.onClick.RemoveAllListeners();
         purchaseButton.onClick.AddListener(OnPurchaseClicked);
 
-        UpdateUI(); // Правильный вызов
+        // Подписываемся на событие изменения счета
+        gameManager.OnScoreChanged += UpdateUI;
+
+        // Вызываем один раз для первоначальной настройки
+        UpdateUI();
+    }
+
+    // Этот метод будет вызываться, когда объект кнопки уничтожается
+    void OnDestroy()
+    {
+        // Отписываемся от события, чтобы избежать ошибок
+        if (gameManager != null)
+        {
+            gameManager.OnScoreChanged -= UpdateUI;
+        }
+    }
+
+    // Этот метод теперь вызывается автоматически по событию от GameManager
+    public void UpdateUI()
+    {
+        if (currentUpgradeData == null) return;
+
+        nameText.text = currentUpgradeData.upgradeName;
+        iconImage.sprite = currentUpgradeData.icon;
+        priceText.text = FormatNumber(currentCost);
+
+        if (currentUpgradeData.type == UpgradeType.PerClick)
+            effectText.text = $"+{currentUpgradeData.power} за клик";
+        else if (currentUpgradeData.type == UpgradeType.PerSecond)
+            effectText.text = $"+{currentUpgradeData.power} в секунду";
+
+        // Включаем или выключаем кнопку в зависимости от количества очков
+        purchaseButton.interactable = gameManager.score >= currentCost;
     }
 
     public void OnPointerClick(PointerEventData eventData)
     {
-        OnPurchaseClicked();
+        // Вызываем логику покупки только если кнопка активна
+        if (purchaseButton.interactable)
+        {
+            OnPurchaseClicked();
+        }
     }
 
     public void OnPurchaseClicked()
@@ -51,27 +86,16 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     {
         currentLevel++;
         currentCost *= currentUpgradeData.costMultiplier;
-        UpdateUI(); // Правильный вызов
-    }
-
-    // Вот правильное объявление метода
-    public void UpdateUI()
-    {
-        nameText.text = currentUpgradeData.upgradeName; // Убрали (Ур. 0)
-        iconImage.sprite = currentUpgradeData.icon;
-        priceText.text = FormatNumber(currentCost);
-
-        if (currentUpgradeData.type == UpgradeType.PerClick)
-            effectText.text = $"+{currentUpgradeData.power} за клик";
-        else if (currentUpgradeData.type == UpgradeType.PerSecond)
-            effectText.text = $"+{currentUpgradeData.power} в секунду";
-
-        purchaseButton.interactable = gameManager.score >= currentCost;
+        UpdateUI();
     }
 
     public void OnPointerEnter(PointerEventData eventData)
     {
-        transform.localScale = originalScale * 1.1f;
+        // Увеличиваем, только если кнопка активна, для лучшего отклика
+        if (purchaseButton.interactable)
+        {
+            transform.localScale = originalScale * 1.05f;
+        }
     }
 
     public void OnPointerExit(PointerEventData eventData)
