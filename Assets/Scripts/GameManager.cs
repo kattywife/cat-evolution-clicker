@@ -7,62 +7,104 @@ public class GameManager : MonoBehaviour
 {
     // --- ДАННЫЕ ИГРЫ (МОДЕЛЬ) ---
     [Header("Настройки уровней")]
-    public List<LevelData> levels; // Список всех наших уровней (перетащим сюда ассеты)
+    public List<LevelData> levels;
     private int currentLevelIndex = 0;
+
+    [Header("Настройки улучшений")]
+    public List<UpgradeData> upgrades; // Список всех доступных улучшений
 
     // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
     [Header("Текущее состояние")]
     public double score = 0;
+    public long scorePerClick = 1; // Добавляем силу клика
+    public long scorePerSecond = 0; // Добавляем пассивный доход
 
     // --- ССЫЛКИ НА UI (ПРЕДСТАВЛЕНИЕ) ---
     [Header("Ссылки на UI элементы")]
     public TextMeshProUGUI scoreText;
-    public Image catImage; // ИЗМЕНЕНИЕ: теперь ссылка на Image, а не Transform
+    public Image catImage;
 
-    // Start вызывается один раз при запуске игры
+    [Header("Магазин")]
+    public GameObject upgradeButtonPrefab; // Сюда перетащим наш префаб кнопки
+    public Transform shopPanel; // Панель, куда будут добавляться кнопки
+
     void Start()
     {
         // Устанавливаем начальные значения
         score = 0;
         currentLevelIndex = 0;
-        ApplyLevelUp(); // Применяем спрайт самого первого уровня
+        ApplyLevelUp();
         UpdateScoreText();
+
+        // Создаем магазин при старте
+        CreateShop();
     }
+
+    void Update()
+    {
+        // Пассивный доход
+        score += scorePerSecond * Time.deltaTime;
+        UpdateScoreText();
+        // Здесь можно будет добавить логику обновления состояния кнопок (серые/цветные)
+    }
+
+    // --- ОСНОВНЫЕ МЕТОДЫ ---
 
     public void OnCatClicked()
     {
-        score++;
+        score += scorePerClick; // Используем переменную
+        // ... остальной код клика
         UpdateScoreText();
         CheckForLevelUp();
-
-        // Анимация клика
         catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
         Invoke("ResetCatScale", 0.1f);
     }
 
+    public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
+    {
+        if (score >= cost)
+        {
+            score -= cost;
+            if (upgrade.type == UpgradeType.PerClick)
+            {
+                scorePerClick += upgrade.power;
+            }
+            else if (upgrade.type == UpgradeType.PerSecond)
+            {
+                scorePerSecond += upgrade.power;
+            }
+
+            // Сообщаем кнопке, что покупка совершена
+            button.OnPurchaseSuccess();
+        }
+    }
+
+    // --- МЕТОДЫ-ПОМОЩНИКИ ---
+
+    private void CreateShop()
+    {
+        foreach (var upgrade in upgrades)
+        {
+            // Создаем копию префаба
+            GameObject newButton = Instantiate(upgradeButtonPrefab, shopPanel);
+            // Получаем ее скрипт и настраиваем
+            newButton.GetComponent<UpgradeButtonUI>().Setup(upgrade, this); // Передаем данные и ссылку на себя
+        }
+    }
+
     private void CheckForLevelUp()
     {
-        // Проверяем, не последний ли это уровень
-        if (currentLevelIndex + 1 >= levels.Count)
-        {
-            return; // Мы уже на максимальном уровне, выходим
-        }
-
-        // Проверяем, набрали ли мы достаточно очков для СЛЕДУЮЩЕГО уровня
+        if (currentLevelIndex + 1 >= levels.Count) return;
         if (score >= levels[currentLevelIndex + 1].scoreToReach)
         {
-            currentLevelIndex++; // Повышаем уровень
-            ApplyLevelUp(); // Применяем изменения
+            currentLevelIndex++;
+            ApplyLevelUp();
         }
     }
 
     private void ApplyLevelUp()
     {
-        // Получаем данные текущего уровня
-        LevelData currentLevel = levels[currentLevelIndex];
-
-        // Меняем спрайт котика
-        catImage.sprite = currentLevel.catSprite;
+        catImage.sprite = levels[currentLevelIndex].catSprite;
     }
 
     private void ResetCatScale()
