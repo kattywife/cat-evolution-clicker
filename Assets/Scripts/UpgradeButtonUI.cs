@@ -1,10 +1,12 @@
+// Импортируем все необходимые пространства имен
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
 
 
-public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
+// Убираем IPointerClickHandler из списка интерфейсов, чтобы избежать двойного клика
+public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     [Header("UI Elements")]
     public TextMeshProUGUI nameText;
@@ -13,6 +15,7 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     public Image iconImage;
     public Button purchaseButton;
 
+    // Приватные переменные для хранения состояния кнопки
     private UpgradeData currentUpgradeData;
     private int currentLevel = 0;
     private double currentCost = 0;
@@ -21,9 +24,11 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
     void Awake()
     {
+        // Запоминаем оригинальный размер, чтобы использовать его для анимации наведения
         originalScale = transform.localScale;
     }
 
+    // Метод для первоначальной настройки кнопки при создании магазина
     public void Setup(UpgradeData data, GameManager manager)
     {
         currentUpgradeData = data;
@@ -31,19 +36,45 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         currentLevel = 0;
         currentCost = currentUpgradeData.baseCost;
 
+        // Назначаем обработчик клика ТОЛЬКО через компонент Button
+        // Сначала очищаем старые подписки на всякий случай
         purchaseButton.onClick.RemoveAllListeners();
+        // Добавляем новый вызов нашего метода
         purchaseButton.onClick.AddListener(OnPurchaseClicked);
 
+        // Обновляем весь текст на кнопке
         UpdateTextAndIcons();
     }
 
-    // НОВЫЙ ПРОСТОЙ МЕТОД ДЛЯ ОБНОВЛЕНИЯ
+    // Этот метод вызывается, когда игрок нажимает на кнопку
+    public void OnPurchaseClicked()
+    {
+        // GameManager сам проверит, хватает ли очков,
+        // но для надежности можно и здесь проверить, прежде чем вызывать метод
+        if (gameManager.score >= currentCost)
+        {
+            gameManager.PurchaseUpgrade(currentUpgradeData, currentCost, this);
+        }
+    }
+
+    // Этот метод вызывается из GameManager после успешной покупки
+    public void OnPurchaseSuccess()
+    {
+        currentLevel++;
+        currentCost *= currentUpgradeData.costMultiplier;
+
+        // После покупки нужно обновить текст с новой ценой
+        UpdateTextAndIcons();
+    }
+
+    // Этот метод вызывается каждый кадр из GameManager,
+    // чтобы включать и выключать кнопку в зависимости от счета игрока
     public void UpdateInteractableState(double currentScore)
     {
         purchaseButton.interactable = currentScore >= currentCost;
     }
 
-    // Метод для обновления текста, который не нужно вызывать каждый кадр
+    // Вспомогательный метод для обновления всех текстовых полей и иконок
     public void UpdateTextAndIcons()
     {
         nameText.text = currentUpgradeData.upgradeName;
@@ -51,30 +82,38 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         priceText.text = FormatNumber(currentCost);
 
         if (currentUpgradeData.type == UpgradeType.PerClick)
+        {
             effectText.text = $"+{currentUpgradeData.power} за клик";
+        }
         else if (currentUpgradeData.type == UpgradeType.PerSecond)
+        {
             effectText.text = $"+{currentUpgradeData.power} в секунду";
+        }
     }
 
-    public void OnPointerClick(PointerEventData eventData)
+    // --- Обработчики наведения мыши (для визуальных эффектов) ---
+
+    public void OnPointerEnter(PointerEventData eventData)
     {
-        if (purchaseButton.interactable) OnPurchaseClicked();
+        // Увеличиваем кнопку при наведении, только если она активна
+        if (purchaseButton.interactable)
+        {
+            transform.localScale = originalScale * 1.05f;
+        }
     }
 
-    public void OnPurchaseClicked()
+    public void OnPointerExit(PointerEventData eventData)
     {
-        gameManager.PurchaseUpgrade(currentUpgradeData, currentCost, this);
+        // Возвращаем кнопке исходный размер, когда мышь уходит
+        transform.localScale = originalScale;
     }
 
-    public void OnPurchaseSuccess()
+    // Форматирование чисел для красивого отображения (K, M)
+    private string FormatNumber(double number)
     {
-        currentLevel++;
-        currentCost *= currentUpgradeData.costMultiplier;
-        UpdateTextAndIcons(); // Обновляем только текст после покупки
+        if (number < 1000) return number.ToString("F0");
+        if (number < 1000000) return (number / 1000).ToString("F1") + "K";
+        if (number < 1000000000) return (number / 1000000).ToString("F1") + "M";
+        return (number / 1000000000).ToString("F1") + "B"; // Я заменил G3 на B для миллиардов, это более стандартно
     }
-
-    // ... (методы OnPointerEnter, OnPointerExit, FormatNumber без изменений) ...
-    public void OnPointerEnter(PointerEventData eventData) { if (purchaseButton.interactable) transform.localScale = originalScale * 1.05f; }
-    public void OnPointerExit(PointerEventData eventData) { transform.localScale = originalScale; }
-    private string FormatNumber(double number) { if (number < 1000) return number.ToString("F0"); if (number < 1000000) return (number / 1000).ToString("F1") + "K"; if (number < 1000000000) return (number / 1000000).ToString("F1") + "M"; return number.ToString("G3"); }
 }

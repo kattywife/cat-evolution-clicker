@@ -71,6 +71,13 @@ public class GameManager : MonoBehaviour
 
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
+
+        // --- ÍÀ×ÀËÎ ÍÀØÅÉ ÏÐÎÂÅÐÊÈ ---
+        Debug.Log($"Ïîïûòêà ïîêóïêè '{upgrade.name}'. " +
+                  $"Òåêóùèé ïàññèâíûé äîõîä: {scorePerSecond}. " +
+                  $"Ñèëà óëó÷øåíèÿ (power): {upgrade.power}. " +
+                  $"Ñòîèìîñòü: {cost}");
+        // --- ÊÎÍÅÖ ÏÐÎÂÅÐÊÈ ---
         if (score >= cost)
         {
             score -= cost;
