@@ -2,15 +2,14 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
-using System; // ОБЯЗАТЕЛЬНО для работы с Action (событиями)
+using System;
 
 public class GameManager : MonoBehaviour
 {
-    // --- СОБЫТИЕ ---
-    // Это событие будет вызываться каждый раз, когда меняется счет.
+    // --- СОБЫТИЯ ---
     public event Action OnScoreChanged;
 
-    // --- ДАННЫЕ ИГРЫ (МОДЕЛЬ) ---
+    // --- ДАННЫЕ ИГРЫ ---
     [Header("Настройки уровней")]
     public List<LevelData> levels;
     private int currentLevelIndex = 0;
@@ -20,56 +19,68 @@ public class GameManager : MonoBehaviour
 
     // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
     [Header("Текущее состояние")]
-    private double _score = 0; // Приватная переменная для хранения счета
-    public double score // Публичное "свойство" для доступа к счету
+    private double _score = 0;
+    public double score
     {
-        get { return _score; } // Когда кто-то читает score, он получает значение _score
-        private set // Когда кто-то пытается записать в score, выполняется этот код
+        get { return _score; }
+        private set
         {
-            _score = value;
-            OnScoreChanged?.Invoke(); // Вызываем событие, чтобы оповестить всех подписчиков
+            if (_score != value)
+            {
+                _score = value;
+                OnScoreChanged?.Invoke();
+            }
         }
     }
     public long scorePerClick = 1;
     public long scorePerSecond = 0;
 
-    // --- ССЫЛКИ НА UI (ПРЕДСТАВЛЕНИЕ) ---
+    // --- ССЫЛКИ НА UI ---
     [Header("Ссылки на UI элементы")]
-    public TextMeshProUGUI scoreText;
+    public TextMeshProUGUI oldScoreText; // Старый текст, который по центру. Можно удалить, если не нужен.
     public Image catImage;
+    public Slider levelProgressBar;
+    public TextMeshProUGUI levelNumberText;
+    public TextMeshProUGUI progressText;
+    public TextMeshProUGUI totalScoreText;  // Текст на облачке для общего счета
+    public TextMeshProUGUI perSecondText;   // Текст на облачке для пассивного дохода
 
     [Header("Магазин")]
     public GameObject upgradeButtonPrefab;
     public Transform shopPanel;
 
+    // --- ОСНОВНЫЕ МЕТОДЫ UNITY ---
     void Start()
     {
         currentLevelIndex = 0;
-        ApplyLevelUp();
+        scorePerClick = 1;
+        scorePerSecond = 0;
 
+        ApplyLevelUp();
         CreateShop();
-        score = 0; // Устанавливаем счет в 0. Это вызовет событие и обновит кнопки.
-        UpdateScoreText();
+        score = 0;
+        UpdateAllUITexts(); // Первоначальное обновление всех текстов
+        UpdateProgressBar();
     }
 
     void Update()
     {
         if (scorePerSecond > 0)
         {
-            // Начисляем пассивный доход
-            // Важно: здесь мы обращаемся к _score напрямую, чтобы не вызывать событие каждый кадр
             _score += scorePerSecond * Time.deltaTime;
-            UpdateScoreText(); // Но текст на экране нужно обновлять постоянно
+            UpdateAllUITexts(); // Обновляем тексты постоянно
+            UpdateProgressBar();
         }
     }
 
+    // --- ПУБЛИЧНЫЕ МЕТОДЫ ---
     public void OnCatClicked()
     {
-        score += scorePerClick; // Увеличиваем счет (вызовет событие)
-        UpdateScoreText();
+        score += scorePerClick;
+        UpdateAllUITexts();
         CheckForLevelUp();
+        UpdateProgressBar();
 
-        // Анимация клика
         catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
         Invoke("ResetCatScale", 0.1f);
     }
@@ -78,41 +89,74 @@ public class GameManager : MonoBehaviour
     {
         if (score >= cost)
         {
-            score -= cost; // Уменьшаем счет (вызовет событие)
-            UpdateScoreText();
+            score -= cost;
 
             if (upgrade.type == UpgradeType.PerClick)
-            {
                 scorePerClick += upgrade.power;
-            }
             else if (upgrade.type == UpgradeType.PerSecond)
-            {
                 scorePerSecond += upgrade.power;
-            }
 
+            UpdateAllUITexts(); // Важно обновить после изменения scorePerSecond
+            UpdateProgressBar();
             button.OnPurchaseSuccess();
         }
     }
 
-    private void CreateShop()
+    // --- ПРИВАТНЫЕ МЕТОДЫ-ПОМОЩНИКИ ---
+    private void UpdateAllUITexts()
     {
-        foreach (var upgrade in upgrades)
+        // Обновляем старый счетчик (если он есть)
+        if (oldScoreText != null)
         {
-            GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopPanel);
-            newButtonGO.GetComponent<UpgradeButtonUI>().Setup(upgrade, this);
+            oldScoreText.text = _score.ToString("F0");
+        }
+
+        // Обновляем новый счетчик на облаке
+        if (totalScoreText != null)
+        {
+            totalScoreText.text = FormatNumber(_score);
+        }
+
+        // Обновляем текст пассивного дохода
+        if (perSecondText != null)
+        {
+            perSecondText.text = $"{FormatNumber(scorePerSecond)}/сек";
         }
     }
 
-    private void UpdateScoreText()
+    private void UpdateProgressBar()
     {
-        if (scoreText != null)
+        if (levelProgressBar == null) return;
+
+        double currentLevelScore = levels[currentLevelIndex].scoreToReach;
+        double nextLevelScore = (currentLevelIndex + 1 < levels.Count) ? levels[currentLevelIndex + 1].scoreToReach : currentLevelScore;
+
+        levelProgressBar.minValue = (float)currentLevelScore;
+        levelProgressBar.maxValue = (float)nextLevelScore;
+        levelProgressBar.value = (float)score;
+
+        if (levelNumberText != null)
+            levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
+
+        if (progressText != null)
         {
-            scoreText.text = _score.ToString("F0");
+            if (levelProgressBar.value >= levelProgressBar.maxValue && currentLevelIndex + 1 >= levels.Count)
+                progressText.text = "МАКС.";
+            else
+                progressText.text = $"{score.ToString("F0")} / {nextLevelScore.ToString("F0")}";
         }
     }
 
-    // --- Остальные методы-помощники без изменений ---
-    private void CheckForLevelUp() { if (currentLevelIndex + 1 < levels.Count && score >= levels[currentLevelIndex + 1].scoreToReach) { currentLevelIndex++; ApplyLevelUp(); } }
+    private string FormatNumber(double number)
+    {
+        if (number < 1000) return number.ToString("F0");
+        if (number < 1_000_000) return (number / 1000).ToString("F1") + "K";
+        if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M";
+        return number.ToString("G3");
+    }
+
+    private void CreateShop() { foreach (var upgrade in upgrades) { GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopPanel); newButtonGO.GetComponent<UpgradeButtonUI>().Setup(upgrade, this); } }
+    private void CheckForLevelUp() { if (currentLevelIndex + 1 < levels.Count && score >= levels[currentLevelIndex + 1].scoreToReach) { currentLevelIndex++; ApplyLevelUp(); UpdateProgressBar(); } }
     private void ApplyLevelUp() { if (levels.Count > 0) catImage.sprite = levels[currentLevelIndex].catSprite; }
     private void ResetCatScale() { catImage.transform.localScale = new Vector3(1f, 1f, 1f); }
 }
