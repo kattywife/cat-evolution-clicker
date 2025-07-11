@@ -4,11 +4,9 @@ using TMPro;
 using System.Collections.Generic;
 using System;
 
+
 public class GameManager : MonoBehaviour
 {
-    // --- СОБЫТИЯ ---
-    public event Action OnScoreChanged;
-
     // --- ДАННЫЕ ИГРЫ ---
     [Header("Настройки уровней")]
     public List<LevelData> levels;
@@ -19,67 +17,53 @@ public class GameManager : MonoBehaviour
 
     // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
     [Header("Текущее состояние")]
-    private double _score = 0;
-    public double score
-    {
-        get { return _score; }
-        private set
-        {
-            if (_score != value)
-            {
-                _score = value;
-                OnScoreChanged?.Invoke();
-            }
-        }
-    }
+    public double score = 0;
     public long scorePerClick = 1;
     public long scorePerSecond = 0;
 
     // --- ССЫЛКИ НА UI ---
     [Header("Ссылки на UI элементы")]
-    public TextMeshProUGUI oldScoreText; // Старый текст, который по центру. Можно удалить, если не нужен.
+    public TextMeshProUGUI totalScoreText;
+    public TextMeshProUGUI perSecondText;
     public Image catImage;
     public Slider levelProgressBar;
     public TextMeshProUGUI levelNumberText;
     public TextMeshProUGUI progressText;
-    public TextMeshProUGUI totalScoreText;  // Текст на облачке для общего счета
-    public TextMeshProUGUI perSecondText;   // Текст на облачке для пассивного дохода
 
     [Header("Магазин")]
     public GameObject upgradeButtonPrefab;
     public Transform shopPanel;
+    private List<UpgradeButtonUI> shopButtons = new List<UpgradeButtonUI>();
 
     // --- ОСНОВНЫЕ МЕТОДЫ UNITY ---
+
     void Start()
     {
         currentLevelIndex = 0;
         scorePerClick = 1;
         scorePerSecond = 0;
-
-        ApplyLevelUp();
-        CreateShop();
         score = 0;
-        UpdateAllUITexts(); // Первоначальное обновление всех текстов
-        UpdateProgressBar();
+
+        CreateShop();
+        ApplyLevelUp();
     }
 
     void Update()
     {
         if (scorePerSecond > 0)
         {
-            _score += scorePerSecond * Time.deltaTime;
-            UpdateAllUITexts(); // Обновляем тексты постоянно
-            UpdateProgressBar();
+            score += scorePerSecond * Time.deltaTime;
         }
+
+        UpdateAllUI();
     }
 
     // --- ПУБЛИЧНЫЕ МЕТОДЫ ---
+
     public void OnCatClicked()
     {
         score += scorePerClick;
-        UpdateAllUITexts();
         CheckForLevelUp();
-        UpdateProgressBar();
 
         catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
         Invoke("ResetCatScale", 0.1f);
@@ -92,59 +76,104 @@ public class GameManager : MonoBehaviour
             score -= cost;
 
             if (upgrade.type == UpgradeType.PerClick)
+            {
                 scorePerClick += upgrade.power;
+            }
             else if (upgrade.type == UpgradeType.PerSecond)
+            {
                 scorePerSecond += upgrade.power;
+            }
 
-            UpdateAllUITexts(); // Важно обновить после изменения scorePerSecond
-            UpdateProgressBar();
             button.OnPurchaseSuccess();
         }
     }
 
     // --- ПРИВАТНЫЕ МЕТОДЫ-ПОМОЩНИКИ ---
-    private void UpdateAllUITexts()
+
+    private void UpdateAllUI()
     {
-        // Обновляем старый счетчик (если он есть)
-        if (oldScoreText != null)
-        {
-            oldScoreText.text = _score.ToString("F0");
-        }
-
-        // Обновляем новый счетчик на облаке
-        if (totalScoreText != null)
-        {
-            totalScoreText.text = FormatNumber(_score);
-        }
-
-        // Обновляем текст пассивного дохода
-        if (perSecondText != null)
-        {
-            perSecondText.text = $"{FormatNumber(scorePerSecond)}/сек";
-        }
+        UpdateAllUITexts();
+        UpdateProgressBar();
+        UpdateAllShopButtons();
     }
 
+    private void UpdateAllUITexts()
+    {
+        if (totalScoreText != null) totalScoreText.text = FormatNumber(score);
+        if (perSecondText != null) perSecondText.text = $"{FormatNumber(scorePerSecond)}/сек";
+    }
+
+    // --- ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ---
     private void UpdateProgressBar()
     {
         if (levelProgressBar == null) return;
 
-        double currentLevelScore = levels[currentLevelIndex].scoreToReach;
-        double nextLevelScore = (currentLevelIndex + 1 < levels.Count) ? levels[currentLevelIndex + 1].scoreToReach : currentLevelScore;
+        // 1. Обрабатываем случай максимального уровня
+        if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1)
+        {
+            levelProgressBar.minValue = 0;
+            levelProgressBar.maxValue = 1;
+            levelProgressBar.value = 1;
+            if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
+            if (progressText != null) progressText.text = "МАКС.";
+            return;
+        }
 
-        levelProgressBar.minValue = (float)currentLevelScore;
-        levelProgressBar.maxValue = (float)nextLevelScore;
+        // 2. Определяем конечную точку - цель для следующего уровня
+        double barEndValue = levels[currentLevelIndex + 1].scoreToReach;
+
+        // 3. Настраиваем сам слайдер. Начало всегда 0.
+        levelProgressBar.minValue = 0f; // <--- ИЗМЕНЕНИЕ: Начало всегда ноль
+        levelProgressBar.maxValue = (float)barEndValue;
         levelProgressBar.value = (float)score;
 
-        if (levelNumberText != null)
-            levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
-
+        // 4. Обновляем текст (эта строка уже работает как надо для новой логики)
+        if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
         if (progressText != null)
         {
-            if (levelProgressBar.value >= levelProgressBar.maxValue && currentLevelIndex + 1 >= levels.Count)
-                progressText.text = "МАКС.";
-            else
-                progressText.text = $"{score.ToString("F0")} / {nextLevelScore.ToString("F0")}";
+            progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
         }
+    }
+
+
+    private void UpdateAllShopButtons()
+    {
+        foreach (var button in shopButtons)
+        {
+            button.UpdateInteractableState(score);
+        }
+    }
+
+    private void CreateShop()
+    {
+        foreach (var upgrade in upgrades)
+        {
+            GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopPanel);
+            UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>();
+            buttonUI.Setup(upgrade, this);
+            shopButtons.Add(buttonUI);
+        }
+    }
+
+    private void CheckForLevelUp()
+    {
+        while (currentLevelIndex + 1 < levels.Count && score >= levels[currentLevelIndex + 1].scoreToReach)
+        {
+            currentLevelIndex++;
+            ApplyLevelUp();
+        }
+    }
+
+    private void ApplyLevelUp()
+    {
+        if (levels.Count > 0 && currentLevelIndex < levels.Count)
+        {
+            catImage.sprite = levels[currentLevelIndex].catSprite;
+        }
+
+        // Принудительное обновление UI сразу после левел апа очень важно,
+        // чтобы прогресс-бар перенастроился с новыми minValue/maxValue.
+        UpdateAllUI();
     }
 
     private string FormatNumber(double number)
@@ -152,11 +181,11 @@ public class GameManager : MonoBehaviour
         if (number < 1000) return number.ToString("F0");
         if (number < 1_000_000) return (number / 1000).ToString("F1") + "K";
         if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M";
-        return number.ToString("G3");
+        return (number / 1_000_000_000).ToString("F1") + "B";
     }
 
-    private void CreateShop() { foreach (var upgrade in upgrades) { GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopPanel); newButtonGO.GetComponent<UpgradeButtonUI>().Setup(upgrade, this); } }
-    private void CheckForLevelUp() { if (currentLevelIndex + 1 < levels.Count && score >= levels[currentLevelIndex + 1].scoreToReach) { currentLevelIndex++; ApplyLevelUp(); UpdateProgressBar(); } }
-    private void ApplyLevelUp() { if (levels.Count > 0) catImage.sprite = levels[currentLevelIndex].catSprite; }
-    private void ResetCatScale() { catImage.transform.localScale = new Vector3(1f, 1f, 1f); }
+    private void ResetCatScale()
+    {
+        catImage.transform.localScale = new Vector3(1f, 1f, 1f);
+    }
 }
