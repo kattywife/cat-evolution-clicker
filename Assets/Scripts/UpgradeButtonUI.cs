@@ -15,6 +15,8 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     public Image iconImage;
     public Button purchaseButton;
 
+
+
     // Приватные переменные для хранения состояния кнопки
     private UpgradeData currentUpgradeData;
     private int currentLevel = 0;

@@ -30,6 +30,9 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI levelNumberText;
     public TextMeshProUGUI progressText;
 
+    [Header("Эффекты")]
+    public ParticleSystem levelUpEffect;
+
     [Header("Магазин")]
     public GameObject upgradeButtonPrefab;
     public Transform shopPanel;
@@ -176,6 +179,12 @@ public class GameManager : MonoBehaviour
         if (levels.Count > 0 && currentLevelIndex < levels.Count)
         {
             catImage.sprite = levels[currentLevelIndex].catSprite;
+        }
+
+
+        if (levelUpEffect != null)
+        {
+            levelUpEffect.Play();
         }
 
         // Принудительное обновление UI сразу после левел апа очень важно,
