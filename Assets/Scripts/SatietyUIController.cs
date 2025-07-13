@@ -9,6 +9,8 @@ public class SatietyUIController : MonoBehaviour
     public Image satietyProgressBar; // Сюда перетащи ProgressBar_Fill
     public Button feedButton;
     public Button superFeedButton; // Кнопка для рекламы
+    public TextMeshProUGUI satietyText; // цифры процентов голода
+
 
     [Header("Настройки кормления")]
     public double feedCost = 10;
@@ -23,15 +25,19 @@ public class SatietyUIController : MonoBehaviour
 
     void Update()
     {
-        // Обновляем прогресс-бар каждый кадр
         if (gameManager != null)
         {
-            // Получаем процент сытости (может быть > 1.0) и ограничиваем для отображения
-            float fill = gameManager.GetSatietyPercentage();
-            satietyProgressBar.fillAmount = Mathf.Clamp01(fill); // Clamp01 не дает значению выйти за пределы 0-1
+            float fillPercentage = gameManager.GetSatietyPercentage();
+
+            // Обновляем прогресс-бар
+            satietyProgressBar.fillAmount = Mathf.Clamp01(fillPercentage);
+
+            // <<< ВОТ НОВАЯ СТРОКА >>>
+            // Умножаем на 100, чтобы получить проценты, и форматируем как целое число
+            satietyText.text = (fillPercentage * 100).ToString("F0") + "%";
         }
 
-        // Включаем/выключаем кнопку в зависимости от того, хватает ли денег
+        // Включаем/выключаем кнопку
         feedButton.interactable = gameManager.score >= feedCost;
     }
 
