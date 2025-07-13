@@ -1,3 +1,5 @@
+//UpgradeData
+
 using UnityEngine;
 
 public enum UpgradeType { PerClick, PerSecond }

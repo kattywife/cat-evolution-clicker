@@ -1,4 +1,4 @@
-// Импортируем все необходимые пространства имен
+// UpgradeButttonUI
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;

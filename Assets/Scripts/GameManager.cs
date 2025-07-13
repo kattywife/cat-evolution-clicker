@@ -1,9 +1,10 @@
+// GameManager.cs
+
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 using System;
-
 
 public class GameManager : MonoBehaviour
 {
@@ -20,6 +21,16 @@ public class GameManager : MonoBehaviour
     public double score = 0;
     public long scorePerClick = 1;
     public long scorePerSecond = 0;
+
+    // <<< ИЗМЕНЕНИЕ: Добавлены переменные для системы сытости >>>
+    [Header("Настройки Сытости")]
+    public float maxSatiety = 100f; // Максимальное значение сытости (100%)
+    public float currentSatiety; // Текущая сытость
+    [Tooltip("Сколько единиц сытости котик теряет в секунду")]
+    public float satietyDepletionRate = 0.5f;
+    [Tooltip("Множитель дохода, когда котик голоден (0.1 = 10%)")]
+    public float satietyPenaltyMultiplier = 0.1f;
+
 
     // --- ССЫЛКИ НА UI ---
     [Header("Ссылки на UI элементы")]
@@ -47,17 +58,40 @@ public class GameManager : MonoBehaviour
         scorePerSecond = 0;
         score = 0;
 
+        // <<< ИЗМЕНЕНИЕ: Инициализация сытости при старте >>>
+        currentSatiety = maxSatiety;
+
         CreateShop();
         ApplyLevelUp();
     }
 
     void Update()
     {
-        if (scorePerSecond > 0)
+        // <<< ИЗМЕНЕНИЕ: Полностью переработанная логика начисления пассивного дохода >>>
+        // 1. Уменьшаем сытость со временем
+        if (currentSatiety > 0)
         {
-            score += scorePerSecond * Time.deltaTime;
+            currentSatiety -= satietyDepletionRate * Time.deltaTime;
+        }
+        else
+        {
+            currentSatiety = 0; // Не даем уйти в минус
         }
 
+        // 2. Рассчитываем эффективный доход в секунду
+        double effectiveSps = scorePerSecond;
+        if (currentSatiety <= 0)
+        {
+            effectiveSps *= satietyPenaltyMultiplier; // Применяем штраф, если голоден
+        }
+
+        // 3. Начисляем очки
+        if (effectiveSps > 0)
+        {
+            score += effectiveSps * Time.deltaTime;
+        }
+
+        // 4. Обновляем весь UI, включая новые элементы, которые управляются из других скриптов
         UpdateAllUI();
     }
 
@@ -74,13 +108,11 @@ public class GameManager : MonoBehaviour
 
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
-
-        // --- НАЧАЛО НАШЕЙ ПРОВЕРКИ ---
         Debug.Log($"Попытка покупки '{upgrade.name}'. " +
                   $"Текущий пассивный доход: {scorePerSecond}. " +
                   $"Сила улучшения (power): {upgrade.power}. " +
                   $"Стоимость: {cost}");
-        // --- КОНЕЦ ПРОВЕРКИ ---
+
         if (score >= cost)
         {
             score -= cost;
@@ -98,6 +130,37 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // <<< ИЗМЕНЕНИЕ: Добавлены новые публичные методы для управления сытостью >>>
+    public void FeedCat(double cost, float amount)
+    {
+        if (score >= cost)
+        {
+            score -= cost;
+            currentSatiety += amount;
+            if (currentSatiety > maxSatiety)
+            {
+                currentSatiety = maxSatiety; // Обычная еда не может превысить 100%
+            }
+            Debug.Log("Котик покормлен. Текущая сытость: " + currentSatiety);
+        }
+    }
+
+    public void SuperFeedCat()
+    {
+        // Этот метод будет вызван ПОСЛЕ успешного просмотра рекламы
+        // Пока что он вызывается напрямую из заглушки в SatietyUIController
+        currentSatiety = maxSatiety * 2.0f; // Восполняем до 200%
+        Debug.Log("Котик получил супер-корм! Текущая сытость: " + currentSatiety);
+    }
+
+    // Вспомогательный метод для UI
+    public float GetSatietyPercentage()
+    {
+        if (maxSatiety == 0) return 0; // Защита от деления на ноль
+        return currentSatiety / maxSatiety;
+    }
+
+
     // --- ПРИВАТНЫЕ МЕТОДЫ-ПОМОЩНИКИ ---
 
     private void UpdateAllUI()
@@ -110,15 +173,14 @@ public class GameManager : MonoBehaviour
     private void UpdateAllUITexts()
     {
         if (totalScoreText != null) totalScoreText.text = FormatNumber(score);
+        // <<< ИЗМЕНЕНИЕ: Отображаем базовый доход, а не эффективный, чтобы игрок видел, на что он влияет >>>
         if (perSecondText != null) perSecondText.text = $"{FormatNumber(scorePerSecond)}/сек";
     }
 
-    // --- ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ---
     private void UpdateProgressBar()
     {
         if (levelProgressBar == null) return;
 
-        // 1. Обрабатываем случай максимального уровня
         if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1)
         {
             levelProgressBar.minValue = 0;
@@ -129,22 +191,17 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        // 2. Определяем конечную точку - цель для следующего уровня
         double barEndValue = levels[currentLevelIndex + 1].scoreToReach;
-
-        // 3. Настраиваем сам слайдер. Начало всегда 0.
-        levelProgressBar.minValue = 0f; // <--- ИЗМЕНЕНИЕ: Начало всегда ноль
+        levelProgressBar.minValue = 0f;
         levelProgressBar.maxValue = (float)barEndValue;
         levelProgressBar.value = (float)score;
 
-        // 4. Обновляем текст (эта строка уже работает как надо для новой логики)
         if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
         if (progressText != null)
         {
             progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
         }
     }
-
 
     private void UpdateAllShopButtons()
     {
@@ -181,14 +238,11 @@ public class GameManager : MonoBehaviour
             catImage.sprite = levels[currentLevelIndex].catSprite;
         }
 
-
         if (levelUpEffect != null)
         {
             levelUpEffect.Play();
         }
 
-        // Принудительное обновление UI сразу после левел апа очень важно,
-        // чтобы прогресс-бар перенастроился с новыми minValue/maxValue.
         UpdateAllUI();
     }
 
