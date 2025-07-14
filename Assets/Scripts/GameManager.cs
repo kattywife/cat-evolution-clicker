@@ -17,16 +17,21 @@ public class GameManager : MonoBehaviour
     [Header("Настройки улучшений")]
     public List<UpgradeData> upgrades;
 
+    // --- НОВОЕ ---
+    [Header("Звуки")]
+    public AudioClip catClickSound; // Сюда перетащишь звук клика по коту
+    [Tooltip("Звук при переходе на новый уровень")]
+    public AudioClip levelUpSound; // --- НОВОЕ ---
+
     // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
     [Header("Текущее состояние")]
     public double score = 0;
     public long scorePerClick = 1;
     public long scorePerSecond = 0;
 
-    // <<< ИЗМЕНЕНИЕ: Добавлены переменные для системы сытости >>>
     [Header("Настройки Сытости")]
-    public float maxSatiety = 100f; // Максимальное значение сытости (100%)
-    public float currentSatiety; // Текущая сытость
+    public float maxSatiety = 100f;
+    public float currentSatiety;
     [Tooltip("Сколько единиц сытости котик теряет в секунду")]
     public float satietyDepletionRate = 0.5f;
     [Tooltip("Множитель дохода, когда котик голоден (0.1 = 10%)")]
@@ -58,41 +63,33 @@ public class GameManager : MonoBehaviour
         scorePerClick = 1;
         scorePerSecond = 0;
         score = 0;
-
-        // <<< ИЗМЕНЕНИЕ: Инициализация сытости при старте >>>
         currentSatiety = maxSatiety;
-
         CreateShop();
         ApplyLevelUp();
     }
 
     void Update()
     {
-        // <<< ИЗМЕНЕНИЕ: Полностью переработанная логика начисления пассивного дохода >>>
-        // 1. Уменьшаем сытость со временем
         if (currentSatiety > 0)
         {
             currentSatiety -= satietyDepletionRate * Time.deltaTime;
         }
         else
         {
-            currentSatiety = 0; // Не даем уйти в минус
+            currentSatiety = 0;
         }
 
-        // 2. Рассчитываем эффективный доход в секунду
         double effectiveSps = scorePerSecond;
         if (currentSatiety <= 0)
         {
-            effectiveSps *= satietyPenaltyMultiplier; // Применяем штраф, если голоден
+            effectiveSps *= satietyPenaltyMultiplier;
         }
 
-        // 3. Начисляем очки
         if (effectiveSps > 0)
         {
             score += effectiveSps * Time.deltaTime;
         }
 
-        // 4. Обновляем весь UI, включая новые элементы, которые управляются из других скриптов
         UpdateAllUI();
     }
 
@@ -100,6 +97,9 @@ public class GameManager : MonoBehaviour
 
     public void OnCatClicked()
     {
+        // --- ИЗМЕНЕНО ---
+        AudioManager.Instance.PlaySound(catClickSound);
+
         score += scorePerClick;
         CheckForLevelUp();
 
@@ -131,40 +131,31 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // <<< ИЗМЕНЕНИЕ: Добавлены новые публичные методы для управления сытостью >>>
     public void FeedCat(double cost, float amount)
     {
         if (score >= cost)
         {
             score -= cost;
-
-            // Запоминаем, была ли сытость уже выше 100%
             bool wasAlreadySuperFed = currentSatiety > maxSatiety;
-
             currentSatiety += amount;
 
-            // Ограничиваем до 100% только если сытость не была "супер" до этого
             if (!wasAlreadySuperFed && currentSatiety > maxSatiety)
             {
                 currentSatiety = maxSatiety;
             }
-
             Debug.Log("Котик покормлен. Текущая сытость: " + currentSatiety);
         }
     }
 
     public void SuperFeedCat()
     {
-        // Этот метод будет вызван ПОСЛЕ успешного просмотра рекламы
-        // Пока что он вызывается напрямую из заглушки в SatietyUIController
-        currentSatiety = maxSatiety * 2.0f; // Восполняем до 200%
+        currentSatiety = maxSatiety * 2.0f;
         Debug.Log("Котик получил супер-корм! Текущая сытость: " + currentSatiety);
     }
 
-    // Вспомогательный метод для UI
     public float GetSatietyPercentage()
     {
-        if (maxSatiety == 0) return 0; // Защита от деления на ноль
+        if (maxSatiety == 0) return 0;
         return currentSatiety / maxSatiety;
     }
 
@@ -181,7 +172,6 @@ public class GameManager : MonoBehaviour
     private void UpdateAllUITexts()
     {
         if (totalScoreText != null) totalScoreText.text = FormatNumber(score);
-        // <<< ИЗМЕНЕНИЕ: Отображаем базовый доход, а не эффективный, чтобы игрок видел, на что он влияет >>>
         if (perSecondText != null) perSecondText.text = $"{FormatNumber(scorePerSecond)}/сек";
     }
 
@@ -241,16 +231,17 @@ public class GameManager : MonoBehaviour
 
     private void ApplyLevelUp()
     {
+
+        AudioManager.Instance.PlaySound(levelUpSound);
+
         if (levels.Count > 0 && currentLevelIndex < levels.Count)
         {
             catImage.sprite = levels[currentLevelIndex].catSprite;
         }
-
         if (levelUpEffect != null)
         {
             levelUpEffect.Play();
         }
-
         UpdateAllUI();
     }
 
