@@ -1,8 +1,10 @@
-// UpgradeButttonUI
+// GameManager.cs
+
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
+using System.Collections; // <<< НОВОЕ: Добавлено для работы с корутинами (IEnumerator)
 
 
 // Убираем IPointerClickHandler из списка интерфейсов, чтобы избежать двойного клика
@@ -15,6 +17,12 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     public Image iconImage;
     public Button purchaseButton;
 
+    // <<< НОВОЕ: Добавлены настройки для анимации наведения >>>
+    [Header("Настройки анимации наведения")]
+    [Tooltip("Насколько увеличивать кнопку при наведении. 1.05 = 5%")]
+    public float scaleFactor = 1.05f;
+    [Tooltip("За сколько секунд должна проходить анимация")]
+    public float animationDuration = 0.1f;
 
 
     // Приватные переменные для хранения состояния кнопки
@@ -95,20 +103,47 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
     // --- Обработчики наведения мыши (для визуальных эффектов) ---
 
+    // <<< ИЗМЕНЕНО: Теперь этот метод запускает плавную анимацию увеличения >>>
     public void OnPointerEnter(PointerEventData eventData)
     {
         // Увеличиваем кнопку при наведении, только если она активна
         if (purchaseButton.interactable)
         {
-            transform.localScale = originalScale * 1.05f;
+            // Останавливаем предыдущие анимации, чтобы избежать конфликтов
+            StopAllCoroutines();
+            // Запускаем корутину для плавного увеличения
+            StartCoroutine(ScaleOverTime(originalScale * scaleFactor, animationDuration));
         }
     }
 
+    // <<< ИЗМЕНЕНО: Теперь этот метод запускает плавную анимацию возврата к исходному размеру >>>
     public void OnPointerExit(PointerEventData eventData)
     {
-        // Возвращаем кнопке исходный размер, когда мышь уходит
-        transform.localScale = originalScale;
+        // Останавливаем предыдущие анимации
+        StopAllCoroutines();
+        // Запускаем корутину для плавного возврата к оригинальному размеру
+        StartCoroutine(ScaleOverTime(originalScale, animationDuration));
     }
+
+    // <<< НОВОЕ: Корутина для плавного изменения размера во времени >>>
+    private IEnumerator ScaleOverTime(Vector3 targetScale, float duration)
+    {
+        Vector3 initialScale = transform.localScale;
+        float timer = 0f;
+
+        while (timer < duration)
+        {
+            timer += Time.deltaTime;
+            float progress = timer / duration;
+            // Используем Lerp для плавного перехода от initialScale к targetScale
+            transform.localScale = Vector3.Lerp(initialScale, targetScale, progress);
+            yield return null; // Ждем следующего кадра
+        }
+
+        // Гарантируем, что в конце будет установлен точный целевой размер
+        transform.localScale = targetScale;
+    }
+
 
     // Форматирование чисел для красивого отображения (K, M)
     private string FormatNumber(double number)

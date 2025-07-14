@@ -6,6 +6,7 @@ using TMPro;
 using System.Collections.Generic;
 using System;
 
+
 public class GameManager : MonoBehaviour
 {
     // --- ДАННЫЕ ИГРЫ ---
@@ -136,11 +137,18 @@ public class GameManager : MonoBehaviour
         if (score >= cost)
         {
             score -= cost;
+
+            // Запоминаем, была ли сытость уже выше 100%
+            bool wasAlreadySuperFed = currentSatiety > maxSatiety;
+
             currentSatiety += amount;
-            if (currentSatiety > maxSatiety)
+
+            // Ограничиваем до 100% только если сытость не была "супер" до этого
+            if (!wasAlreadySuperFed && currentSatiety > maxSatiety)
             {
-                currentSatiety = maxSatiety; // Обычная еда не может превысить 100%
+                currentSatiety = maxSatiety;
             }
+
             Debug.Log("Котик покормлен. Текущая сытость: " + currentSatiety);
         }
     }
