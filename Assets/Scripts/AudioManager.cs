@@ -25,15 +25,14 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    // Публичный метод, который сможет вызвать любой другой скрипт
-    public void PlaySound(AudioClip clip)
+    // --- ИЗМЕНЕНО: Теперь этот метод может принимать необязательный параметр громкости ---
+    public void PlaySound(AudioClip clip, float volume = 1.0f)
     {
         // Проверяем, что есть и звук, и источник, чтобы избежать ошибок
         if (clip != null && sfxSource != null)
         {
-            // PlayOneShot позволяет проигрывать звуки, не прерывая друг друга.
-            // Идеально для частых кликов!
-            sfxSource.PlayOneShot(clip);
+            // Мы передаем громкость в метод PlayOneShot
+            sfxSource.PlayOneShot(clip, volume);
         }
     }
 }

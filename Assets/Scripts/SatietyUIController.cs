@@ -5,13 +5,11 @@ using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 
-
 public class SatietyUIController : MonoBehaviour
 {
     // --- ССЫЛКИ НА КОМПОНЕНТЫ ---
-
     [Header("Основные ссылки из сцены")]
-    public GameManager gameManager; // <--- Убедись, что эта строка на месте!
+    public GameManager gameManager;
     public Image satietyProgressBar;
     public Button feedButton;
     public Button superFeedButton;
@@ -22,186 +20,204 @@ public class SatietyUIController : MonoBehaviour
     public Image bowlImage;
     public Image cloudImage;
     public Animator catAnimator;
-    public GameObject tear1;
-    public GameObject tear3;
-    [Tooltip("Источник звука на котике (для мяуканья при 0%)")]
+    public GameObject tearPrefab; // --- ИЗМЕНЕНО: Префаб слезы вместо отдельных объектов ---
+    public Transform tearSpawnPointLeft; // --- НОВОЕ: Точка для появления слезы слева ---
+    public Transform tearSpawnPointRight; // --- НОВОЕ: Точка для появления слезы справа ---
+    [Tooltip("Источник звука для мяуканья (сытость 0%)")]
     public AudioSource catHungryAudioSource;
-    [Tooltip("Источник звука на миске (для пульсации 1-20%)")]
-    public AudioSource bowlPulsingAudioSource;
 
-    [Header("Звуки")]
+    [Header("Звуки (Одиночные аудиофайлы)")]
     public AudioClip feedButtonSound;
     public AudioClip feedButtonHoverSound;
     public AudioClip cloudFreezeSound;
-    public AudioClip tearAppearSound;
-    [Tooltip("Как часто (в секундах) должен повторяться звук плача")]
-    public float tearSoundInterval = 4.0f;
+    [Tooltip("Звук пульсации миски (1-20%)")]
+    public AudioClip bowlPulseSound;
+    [Tooltip("Звук капающих слез")]
+    public AudioClip tearDropSound;
 
-    [Header("Спрайты Миски")]
-    public Sprite bowlFullSprite;
-    public Sprite bowlLowSprite;
-    public Sprite bowlEmptySprite;
+    [Header("Настройки частоты звуков (в секундах)")]
+    public float meowInterval = 5.0f;
+    public float bowlPulseInterval = 1.2f;
 
-    [Header("Спрайты Облачка")]
-    public Sprite cloudNormalSprite;
-    public Sprite cloudGreySprite;
+    [Header("Настройки анимации пульсации")]
+    public float pulseScaleAmount = 1.15f;
+    public float pulseAnimationDuration = 0.2f;
 
-    [Header("Настройки Пульсации")]
-    public float pulseMagnitude = 1.1f;
-    public float pulseSpeed = 3f;
+    [Header("Спрайты...")]
+    public Sprite bowlFullSprite, bowlLowSprite, bowlEmptySprite;
+    public Sprite cloudNormalSprite, cloudGreySprite;
 
     // --- ПРИВАТНЫЕ ПЕРЕМЕННЫЕ ---
-    private bool isPulsating = false;
     private Vector3 originalBowlScale;
     private double feedCost = 10;
     private float costIncreaseMultiplier = 1.15f;
     private float feedAmount = 50f;
-    private bool isCrying = false;
     private bool isCloudFrozen = false;
-    private Coroutine tearSoundCoroutine;
+    private Coroutine meowCoroutine, bowlPulseCoroutine;
 
     // --- МЕТОДЫ UNITY ---
+
     void Start()
     {
         feedButton.onClick.AddListener(OnFeedButtonClicked);
         superFeedButton.onClick.AddListener(OnSuperFeedButtonClicked);
-        if (bowlImage != null)
-        {
-            originalBowlScale = bowlImage.transform.localScale;
-        }
+        if (bowlImage != null) originalBowlScale = bowlImage.transform.localScale;
     }
 
     void Update()
     {
         if (gameManager == null) return;
-
         float satietyPercentage = gameManager.GetSatietyPercentage();
         satietyProgressBar.fillAmount = Mathf.Clamp01(satietyPercentage);
         satietyText.text = (satietyPercentage * 100).ToString("F0") + "%";
         feedButton.interactable = gameManager.score >= feedCost;
-        if (feedCostText != null)
-        {
-            feedCostText.text = FormatNumber(feedCost);
-        }
+        if (feedCostText != null) feedCostText.text = FormatNumber(feedCost);
         UpdateHungerEffects(satietyPercentage);
     }
 
-    // --- ЛОГИКА СМЕНЫ ВИЗУАЛА И ЗВУКОВ ---
+    // --- ГЛАВНАЯ ЛОГИКА СОСТОЯНИЙ ---
     private void UpdateHungerEffects(float satietyPercentage)
     {
-        if (tear1 == null || tear3 == null) return;
-
-        // Условие 1: СЫТОСТЬ 0%
+        // Состояние 1: Голод 0%
         if (satietyPercentage <= 0)
         {
             // Визуал
             bowlImage.sprite = bowlEmptySprite;
             cloudImage.sprite = cloudGreySprite;
-            tear1.SetActive(false);
-            tear3.SetActive(true);
             if (catAnimator != null) catAnimator.SetInteger("CryingState", 2);
 
-            // Логика звуков
-            if (catHungryAudioSource != null && !catHungryAudioSource.isPlaying) catHungryAudioSource.Play();
-            if (bowlPulsingAudioSource != null && bowlPulsingAudioSource.isPlaying) bowlPulsingAudioSource.Stop();
+            // Звуки и пульсация
+            StopAndNullifyCoroutine(ref bowlPulseCoroutine);
+            StartCoroutineIfNotRunning(ref meowCoroutine, PlayMeowSoundRepeatedly());
             if (!isCloudFrozen)
             {
                 AudioManager.Instance.PlaySound(cloudFreezeSound);
                 isCloudFrozen = true;
             }
-            if (!isCrying)
-            {
-                isCrying = true;
-                tearSoundCoroutine = StartCoroutine(PlayTearSoundRepeatedly());
-            }
-            if (!isPulsating) StartPulsing();
         }
-        // Условие 2: СЫТОСТЬ 1-20%
+        // --- ИЗМЕНЕНО: Логика для 1-20% сытости ---
+        // Состояние 2: Голод 1-20%
         else if (satietyPercentage <= 0.20f)
         {
             // Визуал
             bowlImage.sprite = bowlLowSprite;
             cloudImage.sprite = cloudNormalSprite;
-            tear1.SetActive(true);
-            tear3.SetActive(false);
+            // УБРАНЫ СЛЕЗЫ, но анимация грусти остается
             if (catAnimator != null) catAnimator.SetInteger("CryingState", 1);
 
-            // Логика звуков
-            if (catHungryAudioSource != null && catHungryAudioSource.isPlaying) catHungryAudioSource.Stop();
-            if (bowlPulsingAudioSource != null && !bowlPulsingAudioSource.isPlaying) bowlPulsingAudioSource.Play();
-            if (!isCrying)
-            {
-                isCrying = true;
-                tearSoundCoroutine = StartCoroutine(PlayTearSoundRepeatedly());
-            }
+            // Звуки и пульсация
+            StopAndNullifyCoroutine(ref meowCoroutine);
+            StartCoroutineIfNotRunning(ref bowlPulseCoroutine, PulseAndPlaySound(bowlImage.transform, originalBowlScale, bowlPulseSound, bowlPulseInterval));
             isCloudFrozen = false;
-            if (!isPulsating) StartPulsing();
         }
-        // Условие 3: ВСЁ В ПОРЯДКЕ (> 20%)
+        // Состояние 3: Все в порядке
         else
         {
             // Визуал
             bowlImage.sprite = bowlFullSprite;
             cloudImage.sprite = cloudNormalSprite;
-            tear1.SetActive(false);
-            tear3.SetActive(false);
             if (catAnimator != null) catAnimator.SetInteger("CryingState", 0);
 
-            // Логика звуков
-            if (catHungryAudioSource != null && catHungryAudioSource.isPlaying) catHungryAudioSource.Stop();
-            if (bowlPulsingAudioSource != null && bowlPulsingAudioSource.isPlaying) bowlPulsingAudioSource.Stop();
-            if (isCrying)
-            {
-                isCrying = false;
-                if (tearSoundCoroutine != null) StopCoroutine(tearSoundCoroutine);
-            }
+            // Звуки и пульсация: выключаем всё
+            StopAndNullifyCoroutine(ref meowCoroutine);
+            StopAndNullifyCoroutine(ref bowlPulseCoroutine);
             isCloudFrozen = false;
-            if (isPulsating) StopPulsing();
         }
     }
 
-    // --- КООПЕРАТИВНАЯ ПРОЦЕДУРА (КОРУТИНА) ДЛЯ ПОВТОРЯЮЩЕГОСЯ ЗВУКА СЛЕЗ ---
-    private IEnumerator PlayTearSoundRepeatedly()
+    // --- НОВЫЙ ПУБЛИЧНЫЙ МЕТОД ДЛЯ ВЫЗОВА ИЗ АНИМАЦИИ ---
+    /// <summary>
+    /// Создает слезу в указанной точке и проигрывает звук падения.
+    /// Вызывается через Animation Event.
+    /// </summary>
+    /// <param name="side">0 для левой стороны, 1 для правой</param>
+    public void DropTear(int side)
+    {
+        // !! ГЛАВНАЯ ПРОВЕРКА !!
+        // Если сытость БОЛЬШЕ НУЛЯ, то мы ничего не делаем и просто выходим из функции.
+        if (gameManager.GetSatietyPercentage() > 0)
+        {
+            return;
+        }
+
+        // Этот код выполнится ТОЛЬКО ЕСЛИ сытость равна 0.
+        Transform spawnPoint = (side == 0) ? tearSpawnPointLeft : tearSpawnPointRight;
+
+        if (tearPrefab != null && spawnPoint != null)
+        {
+            Instantiate(tearPrefab, spawnPoint.position, Quaternion.identity);
+            AudioManager.Instance.PlaySound(tearDropSound);
+        }
+    }
+
+
+    private IEnumerator PlayMeowSoundRepeatedly()
     {
         while (true)
         {
-            AudioManager.Instance.PlaySound(tearAppearSound);
-            yield return new WaitForSeconds(tearSoundInterval);
-        }
-    }
-
-    // --- УПРАВЛЕНИЕ ПУЛЬСАЦИЕЙ (ТОЛЬКО ВИЗУАЛ) ---
-    void StartPulsing()
-    {
-        isPulsating = true;
-        StartCoroutine(PulseEffect());
-    }
-
-    void StopPulsing()
-    {
-        isPulsating = false;
-        // Здесь мы останавливаем ТОЛЬКО корутину пульсации, чтобы не задеть корутину слез
-        StopCoroutine(PulseEffect());
-        if (bowlImage != null)
-        {
-            bowlImage.transform.localScale = originalBowlScale;
-        }
-    }
-
-    private IEnumerator PulseEffect()
-    {
-        while (isPulsating)
-        {
-            if (bowlImage != null)
+            if (catHungryAudioSource != null && catHungryAudioSource.clip != null)
             {
-                float scale = originalBowlScale.x + Mathf.PingPong(Time.time * pulseSpeed, pulseMagnitude - originalBowlScale.x);
-                bowlImage.transform.localScale = new Vector3(scale, scale, scale);
+                catHungryAudioSource.Play();
+                yield return new WaitForSeconds(catHungryAudioSource.clip.length + meowInterval);
             }
-            yield return null;
+            else
+            {
+                yield return new WaitForSeconds(meowInterval);
+            }
         }
     }
 
-    // --- ОСТАЛЬНЫЕ МЕТОДЫ ---
+    private IEnumerator PulseAndPlaySound(Transform targetTransform, Vector3 originalScale, AudioClip clip, float interval)
+    {
+        while (true)
+        {
+            if (targetTransform != null)
+            {
+                float timer = 0f;
+                float halfDuration = pulseAnimationDuration / 2;
+                Vector3 targetScale = originalScale * pulseScaleAmount;
+
+                while (timer < halfDuration)
+                {
+                    targetTransform.localScale = Vector3.Lerp(originalScale, targetScale, timer / halfDuration);
+                    timer += Time.deltaTime;
+                    yield return null;
+                }
+
+                AudioManager.Instance.PlaySound(clip);
+
+                timer = 0;
+                while (timer < halfDuration)
+                {
+                    targetTransform.localScale = Vector3.Lerp(targetScale, originalScale, timer / halfDuration);
+                    timer += Time.deltaTime;
+                    yield return null;
+                }
+                targetTransform.localScale = originalScale;
+            }
+            else
+            {
+                AudioManager.Instance.PlaySound(clip);
+            }
+
+            yield return new WaitForSeconds(interval);
+        }
+    }
+
+    private void StartCoroutineIfNotRunning(ref Coroutine coroutineRef, IEnumerator routine)
+    {
+        if (coroutineRef == null) coroutineRef = StartCoroutine(routine);
+    }
+
+    private void StopAndNullifyCoroutine(ref Coroutine coroutineRef)
+    {
+        if (coroutineRef != null)
+        {
+            StopCoroutine(coroutineRef);
+            coroutineRef = null;
+        }
+    }
+
     void OnFeedButtonClicked()
     {
         if (gameManager.score >= feedCost)

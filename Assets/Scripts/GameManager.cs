@@ -1,11 +1,7 @@
-// GameManager.cs
-
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
+using TMPro; // Убедитесь, что эта строка есть для работы с TextMeshPro
 using System.Collections.Generic;
-using System;
-
 
 public class GameManager : MonoBehaviour
 {
@@ -17,11 +13,10 @@ public class GameManager : MonoBehaviour
     [Header("Настройки улучшений")]
     public List<UpgradeData> upgrades;
 
-    // --- НОВОЕ ---
     [Header("Звуки")]
-    public AudioClip catClickSound; // Сюда перетащишь звук клика по коту
+    public AudioClip catClickSound;
     [Tooltip("Звук при переходе на новый уровень")]
-    public AudioClip levelUpSound; // --- НОВОЕ ---
+    public AudioClip levelUpSound;
 
     // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
     [Header("Текущее состояние")]
@@ -37,7 +32,6 @@ public class GameManager : MonoBehaviour
     [Tooltip("Множитель дохода, когда котик голоден (0.1 = 10%)")]
     public float satietyPenaltyMultiplier = 0.1f;
 
-
     // --- ССЫЛКИ НА UI ---
     [Header("Ссылки на UI элементы")]
     public TextMeshProUGUI totalScoreText;
@@ -49,6 +43,11 @@ public class GameManager : MonoBehaviour
 
     [Header("Эффекты")]
     public ParticleSystem levelUpEffect;
+    // --- НОВЫЕ ПЕРЕМЕННЫЕ ---
+    [Tooltip("Префаб текста, который появляется при клике")]
+    public GameObject clickTextPrefab;
+    [Tooltip("Объект Canvas, внутри которого будет появляться текст")]
+    public Transform canvasTransform;
 
     [Header("Магазин")]
     public GameObject upgradeButtonPrefab;
@@ -56,7 +55,6 @@ public class GameManager : MonoBehaviour
     private List<UpgradeButtonUI> shopButtons = new List<UpgradeButtonUI>();
 
     // --- ОСНОВНЫЕ МЕТОДЫ UNITY ---
-
     void Start()
     {
         currentLevelIndex = 0;
@@ -95,37 +93,40 @@ public class GameManager : MonoBehaviour
 
     // --- ПУБЛИЧНЫЕ МЕТОДЫ ---
 
+    // --- ИЗМЕНЕННЫЙ МЕТОД ---
     public void OnCatClicked()
     {
-        // --- ИЗМЕНЕНО ---
         AudioManager.Instance.PlaySound(catClickSound);
-
         score += scorePerClick;
         CheckForLevelUp();
-
         catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
         Invoke("ResetCatScale", 0.1f);
+
+        // --- НОВЫЙ КОД ДЛЯ СОЗДАНИЯ ТЕКСТА ---
+        if (clickTextPrefab != null && canvasTransform != null)
+        {
+            // Создаем экземпляр нашего префаба в месте клика мыши и делаем его дочерним объектом Canvas
+            GameObject textGO = Instantiate(clickTextPrefab, Input.mousePosition, Quaternion.identity, canvasTransform);
+
+            // Получаем компонент текста из созданного объекта
+            TextMeshProUGUI textMesh = textGO.GetComponent<TextMeshProUGUI>();
+
+            // Если компонент найден, устанавливаем ему нужный текст, используя форматирование
+            if (textMesh != null)
+            {
+                textMesh.text = "+" + FormatNumber(scorePerClick);
+            }
+        }
     }
 
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
-        Debug.Log($"Попытка покупки '{upgrade.name}'. " +
-                  $"Текущий пассивный доход: {scorePerSecond}. " +
-                  $"Сила улучшения (power): {upgrade.power}. " +
-                  $"Стоимость: {cost}");
-
         if (score >= cost)
         {
             score -= cost;
 
-            if (upgrade.type == UpgradeType.PerClick)
-            {
-                scorePerClick += upgrade.power;
-            }
-            else if (upgrade.type == UpgradeType.PerSecond)
-            {
-                scorePerSecond += upgrade.power;
-            }
+            if (upgrade.type == UpgradeType.PerClick) scorePerClick += upgrade.power;
+            else if (upgrade.type == UpgradeType.PerSecond) scorePerSecond += upgrade.power;
 
             button.OnPurchaseSuccess();
         }
@@ -138,19 +139,13 @@ public class GameManager : MonoBehaviour
             score -= cost;
             bool wasAlreadySuperFed = currentSatiety > maxSatiety;
             currentSatiety += amount;
-
-            if (!wasAlreadySuperFed && currentSatiety > maxSatiety)
-            {
-                currentSatiety = maxSatiety;
-            }
-            Debug.Log("Котик покормлен. Текущая сытость: " + currentSatiety);
+            if (!wasAlreadySuperFed && currentSatiety > maxSatiety) currentSatiety = maxSatiety;
         }
     }
 
     public void SuperFeedCat()
     {
         currentSatiety = maxSatiety * 2.0f;
-        Debug.Log("Котик получил супер-корм! Текущая сытость: " + currentSatiety);
     }
 
     public float GetSatietyPercentage()
@@ -159,9 +154,7 @@ public class GameManager : MonoBehaviour
         return currentSatiety / maxSatiety;
     }
 
-
     // --- ПРИВАТНЫЕ МЕТОДЫ-ПОМОЩНИКИ ---
-
     private void UpdateAllUI()
     {
         UpdateAllUITexts();
@@ -178,7 +171,6 @@ public class GameManager : MonoBehaviour
     private void UpdateProgressBar()
     {
         if (levelProgressBar == null) return;
-
         if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1)
         {
             levelProgressBar.minValue = 0;
@@ -188,24 +180,19 @@ public class GameManager : MonoBehaviour
             if (progressText != null) progressText.text = "МАКС.";
             return;
         }
-
         double barEndValue = levels[currentLevelIndex + 1].scoreToReach;
         levelProgressBar.minValue = 0f;
         levelProgressBar.maxValue = (float)barEndValue;
         levelProgressBar.value = (float)score;
-
         if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
-        if (progressText != null)
-        {
-            progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
-        }
+        if (progressText != null) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
     }
 
     private void UpdateAllShopButtons()
     {
         foreach (var button in shopButtons)
         {
-            button.UpdateInteractableState(score);
+            if (button != null) button.UpdateInteractableState(score);
         }
     }
 
@@ -222,17 +209,21 @@ public class GameManager : MonoBehaviour
 
     private void CheckForLevelUp()
     {
-        while (currentLevelIndex + 1 < levels.Count && score >= levels[currentLevelIndex + 1].scoreToReach)
+        // Убедимся, что есть куда повышать уровень
+        if (currentLevelIndex + 1 < levels.Count)
         {
-            currentLevelIndex++;
-            ApplyLevelUp();
+            if (score >= levels[currentLevelIndex + 1].scoreToReach)
+            {
+                currentLevelIndex++;
+                ApplyLevelUp();
+            }
         }
     }
 
     private void ApplyLevelUp()
     {
-
-        AudioManager.Instance.PlaySound(levelUpSound);
+        // Проигрываем звук повышения уровня с громкостью 80%
+        AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
 
         if (levels.Count > 0 && currentLevelIndex < levels.Count)
         {
@@ -255,6 +246,6 @@ public class GameManager : MonoBehaviour
 
     private void ResetCatScale()
     {
-        catImage.transform.localScale = new Vector3(1f, 1f, 1f);
+        catImage.transform.localScale = Vector3.one;
     }
 }
