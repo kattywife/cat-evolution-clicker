@@ -78,6 +78,21 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         purchaseButton.interactable = currentScore >= currentCost;
     }
 
+    // <--- ВОТ НОВЫЙ МЕТОД, КОТОРЫЙ МЫ ДОБАВИЛИ --- >
+    /// <summary>
+    /// Возвращает, доступна ли кнопка для взаимодействия.
+    /// </summary>
+    /// <returns>true, если кнопка активна, иначе false.</returns>
+    public bool IsInteractable()
+    {
+        // Просто возвращаем текущее состояние interactable у нашей основной кнопки
+        if (purchaseButton != null)
+        {
+            return purchaseButton.interactable;
+        }
+        return false;
+    }
+
     public void UpdateTextAndIcons()
     {
         nameText.text = currentUpgradeData.upgradeName;
