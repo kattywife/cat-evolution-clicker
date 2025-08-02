@@ -20,9 +20,9 @@ public class SatietyUIController : MonoBehaviour
     public Image bowlImage;
     public Image cloudImage;
     public Animator catAnimator;
-    public GameObject tearPrefab; // --- ИЗМЕНЕНО: Префаб слезы вместо отдельных объектов ---
-    public Transform tearSpawnPointLeft; // --- НОВОЕ: Точка для появления слезы слева ---
-    public Transform tearSpawnPointRight; // --- НОВОЕ: Точка для появления слезы справа ---
+    public GameObject tearPrefab;
+    public Transform tearSpawnPointLeft;
+    public Transform tearSpawnPointRight;
     [Tooltip("Источник звука для мяуканья (сытость 0%)")]
     public AudioSource catHungryAudioSource;
 
@@ -67,10 +67,22 @@ public class SatietyUIController : MonoBehaviour
     void Update()
     {
         if (gameManager == null) return;
+
         float satietyPercentage = gameManager.GetSatietyPercentage();
         satietyProgressBar.fillAmount = Mathf.Clamp01(satietyPercentage);
         satietyText.text = (satietyPercentage * 100).ToString("F0") + "%";
-        feedButton.interactable = gameManager.score >= feedCost;
+
+        // --- НОВАЯ ЛОГИКА БЛОКИРОВКИ КНОПОК ---
+        // Создаем переменную, которая будет истинной, только если сытость меньше 100%.
+        bool canFeed = satietyPercentage < 1.0f;
+
+        // Кнопка обычного корма активна, если можно кормить И хватает очков.
+        feedButton.interactable = canFeed && gameManager.score >= feedCost;
+
+        // Кнопка супер-корма активна, только если можно кормить.
+        superFeedButton.interactable = canFeed;
+        // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
         if (feedCostText != null) feedCostText.text = FormatNumber(feedCost);
         UpdateHungerEffects(satietyPercentage);
     }
@@ -95,14 +107,12 @@ public class SatietyUIController : MonoBehaviour
                 isCloudFrozen = true;
             }
         }
-        // --- ИЗМЕНЕНО: Логика для 1-20% сытости ---
         // Состояние 2: Голод 1-20%
         else if (satietyPercentage <= 0.20f)
         {
             // Визуал
             bowlImage.sprite = bowlLowSprite;
             cloudImage.sprite = cloudNormalSprite;
-            // УБРАНЫ СЛЕЗЫ, но анимация грусти остается
             if (catAnimator != null) catAnimator.SetInteger("CryingState", 1);
 
             // Звуки и пульсация
@@ -125,22 +135,13 @@ public class SatietyUIController : MonoBehaviour
         }
     }
 
-    // --- НОВЫЙ ПУБЛИЧНЫЙ МЕТОД ДЛЯ ВЫЗОВА ИЗ АНИМАЦИИ ---
-    /// <summary>
-    /// Создает слезу в указанной точке и проигрывает звук падения.
-    /// Вызывается через Animation Event.
-    /// </summary>
-    /// <param name="side">0 для левой стороны, 1 для правой</param>
     public void DropTear(int side)
     {
-        // !! ГЛАВНАЯ ПРОВЕРКА !!
-        // Если сытость БОЛЬШЕ НУЛЯ, то мы ничего не делаем и просто выходим из функции.
         if (gameManager.GetSatietyPercentage() > 0)
         {
             return;
         }
 
-        // Этот код выполнится ТОЛЬКО ЕСЛИ сытость равна 0.
         Transform spawnPoint = (side == 0) ? tearSpawnPointLeft : tearSpawnPointRight;
 
         if (tearPrefab != null && spawnPoint != null)

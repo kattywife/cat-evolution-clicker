@@ -1,7 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro; // Убедитесь, что эта строка есть для работы с TextMeshPro
+using TMPro; // Убедитесь, что эта строка на месте
 using System.Collections.Generic;
+using UnityEngine.EventSystems;
 
 public class GameManager : MonoBehaviour
 {
@@ -39,11 +40,13 @@ public class GameManager : MonoBehaviour
     public Image catImage;
     public Slider levelProgressBar;
     public TextMeshProUGUI levelNumberText;
-    public TextMeshProUGUI progressText;
+    public TextMeshProUGUI progressText; // <--- ЗДЕСЬ БЫЛА ОШИБКА, ТЕПЕРЬ ИСПРАВЛЕНО
+    [Tooltip("Сюда нужно перетащить камеру, которая рендерит ваш UI")]
+    public Camera uiCamera;
 
     [Header("Эффекты")]
     public ParticleSystem levelUpEffect;
-    // --- НОВЫЕ ПЕРЕМЕННЫЕ ---
+
     [Tooltip("Префаб текста, который появляется при клике")]
     public GameObject clickTextPrefab;
     [Tooltip("Объект Canvas, внутри которого будет появляться текст")]
@@ -92,26 +95,37 @@ public class GameManager : MonoBehaviour
     }
 
     // --- ПУБЛИЧНЫЕ МЕТОДЫ ---
-
-    // --- ИЗМЕНЕННЫЙ МЕТОД ---
-    public void OnCatClicked()
+    public void OnCatClicked(BaseEventData baseData)
     {
+        // Преобразуем общие данные в нужные нам данные о клике мыши
+        PointerEventData eventData = baseData as PointerEventData;
+        if (eventData == null) return;
+
         AudioManager.Instance.PlaySound(catClickSound);
         score += scorePerClick;
         CheckForLevelUp();
         catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
         Invoke("ResetCatScale", 0.1f);
 
-        // --- НОВЫЙ КОД ДЛЯ СОЗДАНИЯ ТЕКСТА ---
         if (clickTextPrefab != null && canvasTransform != null)
         {
-            // Создаем экземпляр нашего префаба в месте клика мыши и делаем его дочерним объектом Canvas
-            GameObject textGO = Instantiate(clickTextPrefab, Input.mousePosition, Quaternion.identity, canvasTransform);
+            GameObject textGO = Instantiate(clickTextPrefab, canvasTransform);
+            RectTransform canvasRect = canvasTransform.GetComponent<RectTransform>();
+            Vector2 localPoint;
 
-            // Получаем компонент текста из созданного объекта
+            Camera cam = (uiCamera != null) ? uiCamera : Camera.main;
+
+            // Эта строка теперь будет работать правильно, потому что родитель (canvasTransform) корректный
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                canvasRect,
+                eventData.position,
+                cam,
+                out localPoint
+            );
+
+            textGO.GetComponent<RectTransform>().localPosition = localPoint;
+
             TextMeshProUGUI textMesh = textGO.GetComponent<TextMeshProUGUI>();
-
-            // Если компонент найден, устанавливаем ему нужный текст, используя форматирование
             if (textMesh != null)
             {
                 textMesh.text = "+" + FormatNumber(scorePerClick);
@@ -209,7 +223,6 @@ public class GameManager : MonoBehaviour
 
     private void CheckForLevelUp()
     {
-        // Убедимся, что есть куда повышать уровень
         if (currentLevelIndex + 1 < levels.Count)
         {
             if (score >= levels[currentLevelIndex + 1].scoreToReach)
@@ -222,7 +235,6 @@ public class GameManager : MonoBehaviour
 
     private void ApplyLevelUp()
     {
-        // Проигрываем звук повышения уровня с громкостью 80%
         AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
 
         if (levels.Count > 0 && currentLevelIndex < levels.Count)
