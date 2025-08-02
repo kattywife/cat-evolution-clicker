@@ -283,8 +283,20 @@ public class GameManager : MonoBehaviour
     private void ApplyLevelUp()
     {
         AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
-        if (levels.Count > 0 && currentLevelIndex < levels.Count) catImage.sprite = levels[currentLevelIndex].catSprite;
-        if (levelUpEffect != null) levelUpEffect.Play();
+
+        if (levels.Count > 0 && currentLevelIndex < levels.Count)
+        {
+            // 1. Ìåíÿåì ñïðàéò êîòèêà
+            catImage.sprite = levels[currentLevelIndex].catSprite;
+
+            // 2. ÑÐÀÇÓ ÏÎÑËÅ ÝÒÎÃÎ "ÍÀÆÈÌÀÅÌ" ÊÍÎÏÊÓ SET NATIVE SIZE ÈÇ ÊÎÄÀ
+            catImage.SetNativeSize();
+        }
+
+        if (levelUpEffect != null)
+        {
+            levelUpEffect.Play();
+        }
     }
     private string FormatNumber(double number)
     {
