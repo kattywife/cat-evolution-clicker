@@ -23,8 +23,8 @@ public class GameManager : MonoBehaviour
     // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
     [Header("Текущее состояние")]
     public double score = 0;
-    public double scorePerClick = 1;      // Используем double для гибкости
-    public double scorePerSecond = 0;     // Используем double для гибкости
+    public double scorePerClick = 1;
+    public double scorePerSecond = 0;
 
     [Header("Настройки Сытости")]
     public float maxSatiety = 100f;
@@ -64,11 +64,13 @@ public class GameManager : MonoBehaviour
     private RectTransform shopContentRectTransform;
     private List<UpgradeButtonUI> shopButtons = new List<UpgradeButtonUI>();
     private bool isShopAnimating = false;
-    private bool hasShownNewItemAnimation = false;
+
+    // Отслеживаем, сколько товаров разблокировано
+    private int unlockedItemsCount = 1; // Начинаем с 1, чтобы первый товар был доступен
 
     // --- МНОЖИТЕЛИ ---
-    private double clickMultiplier = 1.0;   // 1.0 = 100% (без бонуса)
-    private double passiveMultiplier = 1.0; // 1.0 = 100% (без бонуса)
+    private double clickMultiplier = 1.0;
+    private double passiveMultiplier = 1.0;
 
 
     void Start()
@@ -85,12 +87,12 @@ public class GameManager : MonoBehaviour
         }
 
         CreateShop();
+        UpdateAllShopButtonsState(); // Первоначальная установка замков
         ApplyLevelUp();
     }
 
     void Update()
     {
-        // Сначала вычисляем итоговый пассивный доход с учетом множителя
         double finalScorePerSecond = scorePerSecond * passiveMultiplier;
 
         if (currentSatiety > 0)
@@ -102,75 +104,143 @@ public class GameManager : MonoBehaviour
             currentSatiety = 0;
         }
 
-        // Применяем штраф за голод, если он есть
         double effectiveSps = finalScorePerSecond;
         if (currentSatiety <= 0)
         {
             effectiveSps *= satietyPenaltyMultiplier;
         }
 
-        // Начисляем очки
         if (effectiveSps > 0)
         {
             score += effectiveSps * Time.deltaTime;
         }
 
-        // Обновляем UI
-        UpdateAllShopButtonsState();
-        CheckForShopAnimation();
+        // Обновляем только состояние "хватает ли денег" для уже разблокированных кнопок
+        for (int i = 0; i < unlockedItemsCount; i++)
+        {
+            if (i < shopButtons.Count && shopButtons[i] != null)
+            {
+                shopButtons[i].UpdateInteractableState(score);
+            }
+        }
+
         UpdateAllUITexts();
         UpdateProgressBar();
     }
 
-    private void UpdateAllShopButtonsState()
+    public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
-        foreach (var button in shopButtons)
+        if (score >= cost)
         {
-            if (button != null)
+            score -= cost;
+
+            switch (upgrade.type)
             {
-                button.UpdateInteractableState(score);
+                case UpgradeType.PerClick:
+                    scorePerClick += upgrade.power;
+                    break;
+                case UpgradeType.PerSecond:
+                    scorePerSecond += upgrade.power;
+                    break;
+                case UpgradeType.ClickMultiplier:
+                    clickMultiplier += upgrade.power;
+                    break;
+                case UpgradeType.PassiveMultiplier:
+                    passiveMultiplier += upgrade.power;
+                    break;
+                case UpgradeType.GlobalMultiplier:
+                    clickMultiplier += upgrade.power;
+                    passiveMultiplier += upgrade.power;
+                    break;
             }
+
+            int purchasedIndex = shopButtons.IndexOf(button);
+
+            // Если мы купили последний из доступных товаров, открываем следующий
+            if (purchasedIndex == unlockedItemsCount - 1)
+            {
+                if (unlockedItemsCount < shopButtons.Count)
+                {
+                    unlockedItemsCount++;
+
+                    // Запускаем анимацию для НОВОГО товара, если он не входит в число игнорируемых
+                    if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating)
+                    {
+                        var newItemButton = shopButtons[unlockedItemsCount - 1];
+                        StartCoroutine(AnimateScrollToShowItem(newItemButton.GetComponent<RectTransform>()));
+                    }
+                }
+            }
+
+            button.OnPurchaseSuccess();
+            // Сразу после покупки обновляем состояние всех кнопок (замки и доступность)
+            UpdateAllShopButtonsState();
         }
     }
 
-    private void CheckForShopAnimation()
+    private void UpdateAllShopButtonsState()
     {
-        if (isShopAnimating || hasShownNewItemAnimation)
-        {
-            return;
-        }
-
         for (int i = 0; i < shopButtons.Count; i++)
         {
-            UpgradeButtonUI button = shopButtons[i];
-            if (button == null)
+            if (shopButtons[i] == null)
             {
                 continue;
             }
 
-            if (button.IsInteractable())
+            // Товар разблокирован, если его индекс меньше счетчика разблокированных
+            bool isUnlocked = (i < unlockedItemsCount);
+
+            shopButtons[i].SetLockedState(!isUnlocked);
+
+            // Если он разблокирован, дополнительно проверяем, хватает ли денег
+            if (isUnlocked)
             {
-                if (i >= initialItemsToIgnore && !IsItemVisible(button.GetComponent<RectTransform>()))
-                {
-                    StartCoroutine(AnimateScrollToShowItem(button.GetComponent<RectTransform>()));
-                    hasShownNewItemAnimation = true;
-                    return;
-                }
+                shopButtons[i].UpdateInteractableState(score);
             }
         }
+    }
+
+    private IEnumerator AnimateScrollToShowItem(RectTransform targetItem)
+    {
+        isShopAnimating = true;
+        shopScrollRect.enabled = false;
+        Canvas.ForceUpdateCanvases();
+
+        Vector2 startPosition = shopContentRectTransform.anchoredPosition;
+        Vector2 targetPosition = new Vector2(startPosition.x, -targetItem.anchoredPosition.y);
+        Vector2 overshootPosition = targetPosition + new Vector2(0, animationBounceAmount);
+
+        // Фаза "пролета" до позиции чуть дальше цели
+        float timer = 0f;
+        while (timer < 1f)
+        {
+            timer += Time.deltaTime * animationScrollSpeed;
+            shopContentRectTransform.anchoredPosition = Vector2.Lerp(startPosition, overshootPosition, timer);
+            yield return null;
+        }
+
+        // Фаза "возврата" на целевую позицию
+        timer = 0f;
+        while (timer < 1f)
+        {
+            timer += Time.deltaTime * animationScrollSpeed * 1.5f; // Возвращаемся чуть быстрее
+            shopContentRectTransform.anchoredPosition = Vector2.Lerp(overshootPosition, targetPosition, timer);
+            yield return null;
+        }
+
+        // Фиксируем на месте и завершаем анимацию
+        shopContentRectTransform.anchoredPosition = targetPosition;
+        isShopAnimating = false;
+        shopScrollRect.enabled = true;
     }
 
     public void OnCatClicked(BaseEventData baseData)
     {
         PointerEventData eventData = baseData as PointerEventData;
-        if (eventData == null)
-        {
-            return;
-        }
+        if (eventData == null) return;
 
         AudioManager.Instance.PlaySound(catClickSound);
 
-        // Вычисляем итоговый доход от клика с учетом множителя
         double finalScorePerClick = scorePerClick * clickMultiplier;
         score += finalScorePerClick;
 
@@ -191,42 +261,6 @@ public class GameManager : MonoBehaviour
             {
                 textMesh.text = "+" + FormatNumber(finalScorePerClick);
             }
-        }
-    }
-
-    public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
-    {
-        if (score >= cost)
-        {
-            score -= cost;
-
-            // Используем switch для обработки разных типов улучшений
-            switch (upgrade.type)
-            {
-                case UpgradeType.PerClick:
-                    scorePerClick += upgrade.power;
-                    break;
-
-                case UpgradeType.PerSecond:
-                    scorePerSecond += upgrade.power;
-                    break;
-
-                case UpgradeType.ClickMultiplier:
-                    // Прибавляем процент к множителю. Например: 1.0 + 0.15 = 1.15 (т.е. +15%)
-                    clickMultiplier += upgrade.power;
-                    break;
-
-                case UpgradeType.PassiveMultiplier:
-                    passiveMultiplier += upgrade.power;
-                    break;
-
-                case UpgradeType.GlobalMultiplier:
-                    clickMultiplier += upgrade.power;
-                    passiveMultiplier += upgrade.power;
-                    break;
-            }
-
-            button.OnPurchaseSuccess();
         }
     }
 
@@ -301,41 +335,6 @@ public class GameManager : MonoBehaviour
         Vector3 itemBottomLeft = itemCorners[0];
         Vector3 itemTopRight = itemCorners[2];
         return itemTopRight.y < viewportTopRight.y && itemBottomLeft.y > viewportBottomLeft.y;
-    }
-
-    private IEnumerator AnimateScrollToShowItem(RectTransform targetItem)
-    {
-        isShopAnimating = true;
-        shopScrollRect.enabled = false;
-        Canvas.ForceUpdateCanvases();
-        Vector3[] viewportCorners = new Vector3[4];
-        shopScrollRect.viewport.GetWorldCorners(viewportCorners);
-        float viewportBottomY = viewportCorners[0].y;
-        Vector3[] itemCorners = new Vector3[4];
-        targetItem.GetWorldCorners(itemCorners);
-        float itemTopY = itemCorners[2].y;
-        float scrollDistance = viewportBottomY - itemTopY;
-        scrollDistance += 20f;
-        Vector2 startPosition = shopContentRectTransform.anchoredPosition;
-        Vector2 targetPosition = startPosition + new Vector2(0, scrollDistance);
-        Vector2 overshootPosition = targetPosition + new Vector2(0, animationBounceAmount);
-        float timer = 0f;
-        while (timer < 1f)
-        {
-            timer += Time.deltaTime * animationScrollSpeed;
-            shopContentRectTransform.anchoredPosition = Vector2.Lerp(startPosition, overshootPosition, timer);
-            yield return null;
-        }
-        timer = 0f;
-        while (timer < 1f)
-        {
-            timer += Time.deltaTime * animationScrollSpeed * 1.5f;
-            shopContentRectTransform.anchoredPosition = Vector2.Lerp(overshootPosition, targetPosition, timer);
-            yield return null;
-        }
-        shopContentRectTransform.anchoredPosition = targetPosition;
-        isShopAnimating = false;
-        shopScrollRect.enabled = true;
     }
 
     private void CreateShop()

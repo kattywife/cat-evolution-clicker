@@ -14,22 +14,16 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     public TextMeshProUGUI priceText;
     public Image iconImage;
     public Button purchaseButton;
+    public GameObject lockIcon;
 
     [Header("Настройки анимации наведения")]
-    [Tooltip("Насколько увеличивать кнопку при наведении. 1.05 = 5%")]
     public float scaleFactor = 1.05f;
-    [Tooltip("За сколько секунд должна проходить анимация")]
     public float animationDuration = 0.1f;
 
-    // --- НОВОЕ: Добавлены поля для звуков ---
     [Header("Звуки")]
-    [Tooltip("Звук при наведении курсора на кнопку")]
     public AudioClip hoverSound;
-    [Tooltip("Звук при успешной покупке улучшения")]
     public AudioClip purchaseSound;
 
-
-    // Приватные переменные для хранения состояния кнопки
     private UpgradeData currentUpgradeData;
     private int currentLevel = 0;
     private double currentCost = 0;
@@ -54,6 +48,23 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         UpdateTextAndIcons();
     }
 
+    public void SetLockedState(bool isLocked)
+    {
+        if (lockIcon != null)
+        {
+            lockIcon.SetActive(isLocked);
+        }
+
+        nameText.gameObject.SetActive(!isLocked);
+        effectText.gameObject.SetActive(!isLocked);
+        priceText.gameObject.SetActive(!isLocked);
+        iconImage.gameObject.SetActive(!isLocked);
+
+        // --- ВОТ ИСПРАВЛЕНИЕ ---
+        // Мы не выключаем объект кнопки, а делаем ее НЕИНТЕРАКТИВНОЙ
+        purchaseButton.interactable = !isLocked;
+    }
+
     public void OnPurchaseClicked()
     {
         if (gameManager.score >= currentCost)
@@ -64,28 +75,21 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
     public void OnPurchaseSuccess()
     {
-        // --- ИЗМЕНЕНО: Проигрываем звук успешной покупки ---
         AudioManager.Instance.PlaySound(purchaseSound);
-
         currentLevel++;
         currentCost *= currentUpgradeData.costMultiplier;
-
         UpdateTextAndIcons();
     }
 
     public void UpdateInteractableState(double currentScore)
     {
+        // Эта функция теперь снова работает как надо:
+        // она управляет доступностью только для РАЗБЛОКИРОВАННЫХ товаров
         purchaseButton.interactable = currentScore >= currentCost;
     }
 
-    // <--- ВОТ НОВЫЙ МЕТОД, КОТОРЫЙ МЫ ДОБАВИЛИ --- >
-    /// <summary>
-    /// Возвращает, доступна ли кнопка для взаимодействия.
-    /// </summary>
-    /// <returns>true, если кнопка активна, иначе false.</returns>
     public bool IsInteractable()
     {
-        // Просто возвращаем текущее состояние interactable у нашей основной кнопки
         if (purchaseButton != null)
         {
             return purchaseButton.interactable;
@@ -99,41 +103,43 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         iconImage.sprite = currentUpgradeData.icon;
         priceText.text = FormatNumber(currentCost);
 
-        if (currentUpgradeData.type == UpgradeType.PerClick)
+        switch (currentUpgradeData.type)
         {
-            effectText.text = $"+{currentUpgradeData.power} за клик";
-        }
-        else if (currentUpgradeData.type == UpgradeType.PerSecond)
-        {
-            effectText.text = $"+{currentUpgradeData.power} в секунду";
+            case UpgradeType.PerClick:
+                effectText.text = $"+{FormatNumber(currentUpgradeData.power)} за клик";
+                break;
+            case UpgradeType.PerSecond:
+                effectText.text = $"+{FormatNumber(currentUpgradeData.power)} в секунду";
+                break;
+            case UpgradeType.ClickMultiplier:
+                effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% за клик";
+                break;
+            case UpgradeType.PassiveMultiplier:
+                effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% в секунду";
+                break;
+            case UpgradeType.GlobalMultiplier:
+                effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% ко всему";
+                break;
         }
     }
-
-    // --- Обработчики наведения мыши ---
-
     public void OnPointerEnter(PointerEventData eventData)
     {
         if (purchaseButton.interactable)
         {
-            // --- ИЗМЕНЕНО: Проигрываем звук наведения ---
             AudioManager.Instance.PlaySound(hoverSound);
-
             StopAllCoroutines();
             StartCoroutine(ScaleOverTime(originalScale * scaleFactor, animationDuration));
         }
     }
-
     public void OnPointerExit(PointerEventData eventData)
     {
         StopAllCoroutines();
         StartCoroutine(ScaleOverTime(originalScale, animationDuration));
     }
-
     private IEnumerator ScaleOverTime(Vector3 targetScale, float duration)
     {
         Vector3 initialScale = transform.localScale;
         float timer = 0f;
-
         while (timer < duration)
         {
             timer += Time.deltaTime;
@@ -141,15 +147,15 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
             transform.localScale = Vector3.Lerp(initialScale, targetScale, progress);
             yield return null;
         }
-
         transform.localScale = targetScale;
     }
-
     private string FormatNumber(double number)
     {
         if (number < 1000) return number.ToString("F0");
-        if (number < 1000000) return (number / 1000).ToString("F1") + "K";
-        if (number < 1000000000) return (number / 1000000).ToString("F1") + "M";
-        return (number / 1000000000).ToString("F1") + "B";
+        if (number < 1_000_000) return (number / 1000).ToString("F1") + "K";
+        if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M";
+        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B";
+        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T";
+        return (number / 1_000_000_000_000_000).ToString("F1") + "Qa";
     }
 }
