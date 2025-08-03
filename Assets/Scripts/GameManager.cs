@@ -7,8 +7,6 @@ using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
-    // ... (все ваши переменные до Update остаются без изменений) ...
-
     // --- ДАННЫЕ ИГРЫ ---
     [Header("Настройки уровней")]
     public List<LevelData> levels;
@@ -25,8 +23,8 @@ public class GameManager : MonoBehaviour
     // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
     [Header("Текущее состояние")]
     public double score = 0;
-    public long scorePerClick = 1;
-    public long scorePerSecond = 0;
+    public double scorePerClick = 1;      // Используем double для гибкости
+    public double scorePerSecond = 0;     // Используем double для гибкости
 
     [Header("Настройки Сытости")]
     public float maxSatiety = 100f;
@@ -49,31 +47,28 @@ public class GameManager : MonoBehaviour
 
     [Header("Эффекты")]
     public ParticleSystem levelUpEffect;
-
-    [Tooltip("Префаб текста, который появляется при клике")]
     public GameObject clickTextPrefab;
-    [Tooltip("Объект Canvas, внутри которого будет появляться текст")]
     public Transform canvasTransform;
 
     [Header("Магазин")]
     public GameObject upgradeButtonPrefab;
-    [Tooltip("Сюда нужно перетащить объект Content из вашего ScrollView")]
     public Transform shopContentParent;
-    [Tooltip("Сюда нужно перетащить сам объект ShopScrollView, у которого есть компонент ScrollRect")]
     public ScrollRect shopScrollRect;
 
     [Header("Настройки анимации магазина")]
-    [Tooltip("Скорость анимации прокрутки магазина. Больше = быстрее.")]
     public float animationScrollSpeed = 3f;
-    [Tooltip("Насколько далеко прокрутка 'отскочит' за пределы цели в пикселях.")]
     public float animationBounceAmount = 50f;
-    [Tooltip("Не запускать анимацию для первых N товаров в списке.")]
     public int initialItemsToIgnore = 4;
 
+    // --- ПРИВАТНЫЕ ПЕРЕМЕННЫЕ ---
     private RectTransform shopContentRectTransform;
     private List<UpgradeButtonUI> shopButtons = new List<UpgradeButtonUI>();
     private bool isShopAnimating = false;
     private bool hasShownNewItemAnimation = false;
+
+    // --- МНОЖИТЕЛИ ---
+    private double clickMultiplier = 1.0;   // 1.0 = 100% (без бонуса)
+    private double passiveMultiplier = 1.0; // 1.0 = 100% (без бонуса)
 
 
     void Start()
@@ -81,7 +76,7 @@ public class GameManager : MonoBehaviour
         currentLevelIndex = 0;
         scorePerClick = 1;
         scorePerSecond = 0;
-        score = 0; // Убедитесь, что в инспекторе тоже стоит 0!
+        score = 0;
         currentSatiety = maxSatiety;
 
         if (shopContentParent != null)
@@ -95,7 +90,9 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        // ... (вся ваша логика подсчета очков остается прежней) ...
+        // Сначала вычисляем итоговый пассивный доход с учетом множителя
+        double finalScorePerSecond = scorePerSecond * passiveMultiplier;
+
         if (currentSatiety > 0)
         {
             currentSatiety -= satietyDepletionRate * Time.deltaTime;
@@ -104,25 +101,27 @@ public class GameManager : MonoBehaviour
         {
             currentSatiety = 0;
         }
-        double effectiveSps = scorePerSecond;
+
+        // Применяем штраф за голод, если он есть
+        double effectiveSps = finalScorePerSecond;
         if (currentSatiety <= 0)
         {
             effectiveSps *= satietyPenaltyMultiplier;
         }
+
+        // Начисляем очки
         if (effectiveSps > 0)
         {
             score += effectiveSps * Time.deltaTime;
         }
 
-        // ВЫЗЫВАЕМ ОБЕ ФУНКЦИИ КАЖДЫЙ КАДР
+        // Обновляем UI
         UpdateAllShopButtonsState();
         CheckForShopAnimation();
-
         UpdateAllUITexts();
         UpdateProgressBar();
     }
 
-    // --- НОВЫЙ МЕТОД: ВСЕГДА обновляет состояние кнопок (активна/неактивна)
     private void UpdateAllShopButtonsState()
     {
         foreach (var button in shopButtons)
@@ -134,10 +133,8 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // --- ИЗМЕНЕННЫЙ МЕТОД: ТЕПЕРЬ ТОЛЬКО проверяет, не пора ли запустить анимацию
     private void CheckForShopAnimation()
     {
-        // Если анимация уже была или сейчас проигрывается - выходим
         if (isShopAnimating || hasShownNewItemAnimation)
         {
             return;
@@ -151,31 +148,36 @@ public class GameManager : MonoBehaviour
                 continue;
             }
 
-            // Нам нужна кнопка, которая стала доступна, но еще не видна
             if (button.IsInteractable())
             {
                 if (i >= initialItemsToIgnore && !IsItemVisible(button.GetComponent<RectTransform>()))
                 {
                     StartCoroutine(AnimateScrollToShowItem(button.GetComponent<RectTransform>()));
                     hasShownNewItemAnimation = true;
-                    return; // Выходим, чтобы не анимировать другие кнопки
+                    return;
                 }
             }
         }
     }
 
-    // ... (все остальные ваши методы: IsItemVisible, AnimateScrollToShowItem, PurchaseUpgrade и т.д. остаются без изменений) ...
-
-    // Я оставлю их здесь для полноты
     public void OnCatClicked(BaseEventData baseData)
     {
         PointerEventData eventData = baseData as PointerEventData;
-        if (eventData == null) return;
+        if (eventData == null)
+        {
+            return;
+        }
+
         AudioManager.Instance.PlaySound(catClickSound);
-        score += scorePerClick;
+
+        // Вычисляем итоговый доход от клика с учетом множителя
+        double finalScorePerClick = scorePerClick * clickMultiplier;
+        score += finalScorePerClick;
+
         CheckForLevelUp();
         catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
         Invoke("ResetCatScale", 0.1f);
+
         if (clickTextPrefab != null && canvasTransform != null)
         {
             GameObject textGO = Instantiate(clickTextPrefab, canvasTransform);
@@ -185,19 +187,49 @@ public class GameManager : MonoBehaviour
             RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, eventData.position, cam, out localPoint);
             textGO.GetComponent<RectTransform>().localPosition = localPoint;
             TextMeshProUGUI textMesh = textGO.GetComponent<TextMeshProUGUI>();
-            if (textMesh != null) textMesh.text = "+" + FormatNumber(scorePerClick);
+            if (textMesh != null)
+            {
+                textMesh.text = "+" + FormatNumber(finalScorePerClick);
+            }
         }
     }
+
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
         if (score >= cost)
         {
             score -= cost;
-            if (upgrade.type == UpgradeType.PerClick) scorePerClick += upgrade.power;
-            else if (upgrade.type == UpgradeType.PerSecond) scorePerSecond += upgrade.power;
+
+            // Используем switch для обработки разных типов улучшений
+            switch (upgrade.type)
+            {
+                case UpgradeType.PerClick:
+                    scorePerClick += upgrade.power;
+                    break;
+
+                case UpgradeType.PerSecond:
+                    scorePerSecond += upgrade.power;
+                    break;
+
+                case UpgradeType.ClickMultiplier:
+                    // Прибавляем процент к множителю. Например: 1.0 + 0.15 = 1.15 (т.е. +15%)
+                    clickMultiplier += upgrade.power;
+                    break;
+
+                case UpgradeType.PassiveMultiplier:
+                    passiveMultiplier += upgrade.power;
+                    break;
+
+                case UpgradeType.GlobalMultiplier:
+                    clickMultiplier += upgrade.power;
+                    passiveMultiplier += upgrade.power;
+                    break;
+            }
+
             button.OnPurchaseSuccess();
         }
     }
+
     public void FeedCat(double cost, float amount)
     {
         if (score >= cost)
@@ -205,19 +237,43 @@ public class GameManager : MonoBehaviour
             score -= cost;
             bool wasAlreadySuperFed = currentSatiety > maxSatiety;
             currentSatiety += amount;
-            if (!wasAlreadySuperFed && currentSatiety > maxSatiety) currentSatiety = maxSatiety;
+            if (!wasAlreadySuperFed && currentSatiety > maxSatiety)
+            {
+                currentSatiety = maxSatiety;
+            }
         }
     }
-    public void SuperFeedCat() { currentSatiety = maxSatiety * 2.0f; }
-    public float GetSatietyPercentage() { if (maxSatiety == 0) return 0; return currentSatiety / maxSatiety; }
+
+    public void SuperFeedCat()
+    {
+        currentSatiety = maxSatiety * 2.0f;
+    }
+
+    public float GetSatietyPercentage()
+    {
+        if (maxSatiety == 0)
+        {
+            return 0;
+        }
+        return currentSatiety / maxSatiety;
+    }
+
     private void UpdateAllUITexts()
     {
-        if (totalScoreText != null) totalScoreText.text = FormatNumber(score);
-        if (perSecondText != null) perSecondText.text = $"{FormatNumber(scorePerSecond)}/сек";
+        if (totalScoreText != null)
+        {
+            totalScoreText.text = FormatNumber(score);
+        }
+        if (perSecondText != null)
+        {
+            perSecondText.text = $"{FormatNumber(scorePerSecond * passiveMultiplier)}/сек";
+        }
     }
+
     private void UpdateProgressBar()
     {
         if (levelProgressBar == null) return;
+
         if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1)
         {
             levelProgressBar.value = 1;
@@ -225,6 +281,7 @@ public class GameManager : MonoBehaviour
             if (progressText != null) progressText.text = "МАКС.";
             return;
         }
+
         double barEndValue = levels[currentLevelIndex + 1].scoreToReach;
         levelProgressBar.minValue = 0f;
         levelProgressBar.maxValue = (float)barEndValue;
@@ -232,6 +289,7 @@ public class GameManager : MonoBehaviour
         if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
         if (progressText != null) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
     }
+
     private bool IsItemVisible(RectTransform item)
     {
         Vector3[] viewportCorners = new Vector3[4];
@@ -244,6 +302,7 @@ public class GameManager : MonoBehaviour
         Vector3 itemTopRight = itemCorners[2];
         return itemTopRight.y < viewportTopRight.y && itemBottomLeft.y > viewportBottomLeft.y;
     }
+
     private IEnumerator AnimateScrollToShowItem(RectTransform targetItem)
     {
         isShopAnimating = true;
@@ -278,18 +337,37 @@ public class GameManager : MonoBehaviour
         isShopAnimating = false;
         shopScrollRect.enabled = true;
     }
-    private void CreateShop() { foreach (var upgrade in upgrades) { GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopContentParent); UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>(); buttonUI.Setup(upgrade, this); shopButtons.Add(buttonUI); } }
-    private void CheckForLevelUp() { if (currentLevelIndex + 1 < levels.Count) { if (score >= levels[currentLevelIndex + 1].scoreToReach) { currentLevelIndex++; ApplyLevelUp(); } } }
+
+    private void CreateShop()
+    {
+        foreach (var upgrade in upgrades)
+        {
+            GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopContentParent);
+            UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>();
+            buttonUI.Setup(upgrade, this);
+            shopButtons.Add(buttonUI);
+        }
+    }
+
+    private void CheckForLevelUp()
+    {
+        if (currentLevelIndex + 1 < levels.Count)
+        {
+            if (score >= levels[currentLevelIndex + 1].scoreToReach)
+            {
+                currentLevelIndex++;
+                ApplyLevelUp();
+            }
+        }
+    }
+
     private void ApplyLevelUp()
     {
         AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
 
         if (levels.Count > 0 && currentLevelIndex < levels.Count)
         {
-            // 1. Меняем спрайт котика
             catImage.sprite = levels[currentLevelIndex].catSprite;
-
-            // 2. СРАЗУ ПОСЛЕ ЭТОГО "НАЖИМАЕМ" КНОПКУ SET NATIVE SIZE ИЗ КОДА
             catImage.SetNativeSize();
         }
 
@@ -298,12 +376,19 @@ public class GameManager : MonoBehaviour
             levelUpEffect.Play();
         }
     }
+
     private string FormatNumber(double number)
     {
         if (number < 1000) return number.ToString("F0");
         if (number < 1_000_000) return (number / 1000).ToString("F1") + "K";
         if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M";
-        return (number / 1_000_000_000).ToString("F1") + "B";
+        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B";
+        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T";
+        return (number / 1_000_000_000_000_000).ToString("F1") + "Qa";
     }
-    private void ResetCatScale() { catImage.transform.localScale = Vector3.one; }
+
+    private void ResetCatScale()
+    {
+        catImage.transform.localScale = Vector3.one;
+    }
 }

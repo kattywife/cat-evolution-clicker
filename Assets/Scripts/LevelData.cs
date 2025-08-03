@@ -7,7 +7,7 @@ using UnityEngine;
 public class LevelData : ScriptableObject
 {
     [Tooltip("Счет, необходимый для достижения этого уровня")]
-    public int scoreToReach;
+    public double scoreToReach;
 
     [Tooltip("Спрайт котика для этого уровня")]
     public Sprite catSprite;

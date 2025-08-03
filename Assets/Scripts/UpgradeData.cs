@@ -1,8 +1,16 @@
-//UpgradeData
+// UpgradeData.cs
 
 using UnityEngine;
 
-public enum UpgradeType { PerClick, PerSecond }
+// --- ОБНОВЛЕНО: Добавляем новые типы для множителей ---
+public enum UpgradeType
+{
+    PerClick,          // Простое добавление к клику
+    PerSecond,         // Простое добавление к пассивному доходу
+    ClickMultiplier,   // Множитель для клика (+15% -> 0.15)
+    PassiveMultiplier, // Множитель для пассивного дохода (+15% -> 0.15)
+    GlobalMultiplier   // Множитель для всего (+50% -> 0.50)
+}
 
 [CreateAssetMenu(fileName = "NewUpgrade", menuName = "Game Data/Upgrade")]
 public class UpgradeData : ScriptableObject
@@ -13,7 +21,8 @@ public class UpgradeData : ScriptableObject
 
     [Header("Stats")]
     public UpgradeType type;
-    public long power;
+    // --- ОБНОВЛЕНО: Меняем long на double, чтобы хранить и целые числа, и проценты ---
+    public double power;
 
     [Header("Cost")]
     public double baseCost;
