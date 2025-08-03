@@ -4,6 +4,7 @@ using TMPro;
 using System.Collections.Generic;
 using UnityEngine.EventSystems;
 using System.Collections;
+using UnityEngine.Video; // ДОБАВЛЕНО: для работы с VideoPlayer
 
 public class GameManager : MonoBehaviour
 {
@@ -45,6 +46,24 @@ public class GameManager : MonoBehaviour
     [Tooltip("Сюда нужно перетащить камеру, которая рендерит ваш UI")]
     public Camera uiCamera;
 
+    // --- НАЧАЛО: НОВЫЕ ССЫЛКИ ДЛЯ КОНЦОВКИ ---
+    [Header("Ссылки на элементы Концовки")]
+    [Tooltip("Панель с основным игровым UI (кот, магазин), которая будет скрыта")]
+    public GameObject mainGamePanel;
+    [Tooltip("Панель, которая появится в конце (с видео и текстом)")]
+    public GameObject endingPanel;
+    [Tooltip("Компонент Video Player, который проиграет финальное видео")]
+    public VideoPlayer endingVideoPlayer;
+    [Tooltip("Текстовый элемент для финального сообщения")]
+    public TextMeshProUGUI endingText;
+    [Tooltip("Музыка, которая будет играть во время концовки")]
+    public AudioClip endingMusic;
+    [Tooltip("Финальное сообщение, которое появится на экране")]
+    [TextArea(3, 10)] // Удобное поле для ввода текста в инспекторе
+    public string finalMessage;
+    // --- КОНЕЦ: НОВЫЕ ССЫЛКИ ДЛЯ КОНЦОВКИ ---
+
+
     [Header("Эффекты")]
     public ParticleSystem levelUpEffect;
     public GameObject clickTextPrefab;
@@ -64,9 +83,7 @@ public class GameManager : MonoBehaviour
     private RectTransform shopContentRectTransform;
     private List<UpgradeButtonUI> shopButtons = new List<UpgradeButtonUI>();
     private bool isShopAnimating = false;
-
-    // Отслеживаем, сколько товаров разблокировано
-    private int unlockedItemsCount = 1; // Начинаем с 1, чтобы первый товар был доступен
+    private int unlockedItemsCount = 1;
 
     // --- МНОЖИТЕЛИ ---
     private double clickMultiplier = 1.0;
@@ -86,8 +103,14 @@ public class GameManager : MonoBehaviour
             shopContentRectTransform = shopContentParent.GetComponent<RectTransform>();
         }
 
+        // ДОБАВЛЕНО: Прячем панель концовки при старте игры
+        if (endingPanel != null)
+        {
+            endingPanel.SetActive(false);
+        }
+
         CreateShop();
-        UpdateAllShopButtonsState(); // Первоначальная установка замков
+        UpdateAllShopButtonsState();
         ApplyLevelUp();
     }
 
@@ -115,7 +138,6 @@ public class GameManager : MonoBehaviour
             score += effectiveSps * Time.deltaTime;
         }
 
-        // Обновляем только состояние "хватает ли денег" для уже разблокированных кнопок
         for (int i = 0; i < unlockedItemsCount; i++)
         {
             if (i < shopButtons.Count && shopButtons[i] != null)
@@ -128,241 +150,14 @@ public class GameManager : MonoBehaviour
         UpdateProgressBar();
     }
 
-    public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
-    {
-        if (score >= cost)
-        {
-            score -= cost;
-
-            switch (upgrade.type)
-            {
-                case UpgradeType.PerClick:
-                    scorePerClick += upgrade.power;
-                    break;
-                case UpgradeType.PerSecond:
-                    scorePerSecond += upgrade.power;
-                    break;
-                case UpgradeType.ClickMultiplier:
-                    clickMultiplier += upgrade.power;
-                    break;
-                case UpgradeType.PassiveMultiplier:
-                    passiveMultiplier += upgrade.power;
-                    break;
-                case UpgradeType.GlobalMultiplier:
-                    clickMultiplier += upgrade.power;
-                    passiveMultiplier += upgrade.power;
-                    break;
-            }
-
-            int purchasedIndex = shopButtons.IndexOf(button);
-
-            // Если мы купили последний из доступных товаров, открываем следующий
-            if (purchasedIndex == unlockedItemsCount - 1)
-            {
-                if (unlockedItemsCount < shopButtons.Count)
-                {
-                    unlockedItemsCount++;
-
-                    // Запускаем анимацию для НОВОГО товара, если он не входит в число игнорируемых
-                    if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating)
-                    {
-                        var newItemButton = shopButtons[unlockedItemsCount - 1];
-                        StartCoroutine(AnimateScrollToShowItem(newItemButton.GetComponent<RectTransform>()));
-                    }
-                }
-            }
-
-            button.OnPurchaseSuccess();
-            // Сразу после покупки обновляем состояние всех кнопок (замки и доступность)
-            UpdateAllShopButtonsState();
-        }
-    }
-
-    private void UpdateAllShopButtonsState()
-    {
-        for (int i = 0; i < shopButtons.Count; i++)
-        {
-            if (shopButtons[i] == null)
-            {
-                continue;
-            }
-
-            // Товар разблокирован, если его индекс меньше счетчика разблокированных
-            bool isUnlocked = (i < unlockedItemsCount);
-
-            shopButtons[i].SetLockedState(!isUnlocked);
-
-            // Если он разблокирован, дополнительно проверяем, хватает ли денег
-            if (isUnlocked)
-            {
-                shopButtons[i].UpdateInteractableState(score);
-            }
-        }
-    }
-
-    private IEnumerator AnimateScrollToShowItem(RectTransform targetItem)
-    {
-        isShopAnimating = true;
-        shopScrollRect.enabled = false;
-        Canvas.ForceUpdateCanvases();
-
-        Vector2 startPosition = shopContentRectTransform.anchoredPosition;
-        Vector2 targetPosition = new Vector2(startPosition.x, -targetItem.anchoredPosition.y);
-        Vector2 overshootPosition = targetPosition + new Vector2(0, animationBounceAmount);
-
-        // Фаза "пролета" до позиции чуть дальше цели
-        float timer = 0f;
-        while (timer < 1f)
-        {
-            timer += Time.deltaTime * animationScrollSpeed;
-            shopContentRectTransform.anchoredPosition = Vector2.Lerp(startPosition, overshootPosition, timer);
-            yield return null;
-        }
-
-        // Фаза "возврата" на целевую позицию
-        timer = 0f;
-        while (timer < 1f)
-        {
-            timer += Time.deltaTime * animationScrollSpeed * 1.5f; // Возвращаемся чуть быстрее
-            shopContentRectTransform.anchoredPosition = Vector2.Lerp(overshootPosition, targetPosition, timer);
-            yield return null;
-        }
-
-        // Фиксируем на месте и завершаем анимацию
-        shopContentRectTransform.anchoredPosition = targetPosition;
-        isShopAnimating = false;
-        shopScrollRect.enabled = true;
-    }
-
-    public void OnCatClicked(BaseEventData baseData)
-    {
-        PointerEventData eventData = baseData as PointerEventData;
-        if (eventData == null) return;
-
-        AudioManager.Instance.PlaySound(catClickSound);
-
-        double finalScorePerClick = scorePerClick * clickMultiplier;
-        score += finalScorePerClick;
-
-        CheckForLevelUp();
-        catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f);
-        Invoke("ResetCatScale", 0.1f);
-
-        if (clickTextPrefab != null && canvasTransform != null)
-        {
-            GameObject textGO = Instantiate(clickTextPrefab, canvasTransform);
-            RectTransform canvasRect = canvasTransform.GetComponent<RectTransform>();
-            Vector2 localPoint;
-            Camera cam = (uiCamera != null) ? uiCamera : Camera.main;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, eventData.position, cam, out localPoint);
-            textGO.GetComponent<RectTransform>().localPosition = localPoint;
-            TextMeshProUGUI textMesh = textGO.GetComponent<TextMeshProUGUI>();
-            if (textMesh != null)
-            {
-                textMesh.text = "+" + FormatNumber(finalScorePerClick);
-            }
-        }
-    }
-
-    public void FeedCat(double cost, float amount)
-    {
-        if (score >= cost)
-        {
-            score -= cost;
-            bool wasAlreadySuperFed = currentSatiety > maxSatiety;
-            currentSatiety += amount;
-            if (!wasAlreadySuperFed && currentSatiety > maxSatiety)
-            {
-                currentSatiety = maxSatiety;
-            }
-        }
-    }
-
-    public void SuperFeedCat()
-    {
-        currentSatiety = maxSatiety * 2.0f;
-    }
-
-    public float GetSatietyPercentage()
-    {
-        if (maxSatiety == 0)
-        {
-            return 0;
-        }
-        return currentSatiety / maxSatiety;
-    }
-
-    private void UpdateAllUITexts()
-    {
-        if (totalScoreText != null)
-        {
-            totalScoreText.text = FormatNumber(score);
-        }
-        if (perSecondText != null)
-        {
-            perSecondText.text = $"{FormatNumber(scorePerSecond * passiveMultiplier)}/сек";
-        }
-    }
-
-    private void UpdateProgressBar()
-    {
-        if (levelProgressBar == null) return;
-
-        if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1)
-        {
-            levelProgressBar.value = 1;
-            if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
-            if (progressText != null) progressText.text = "МАКС.";
-            return;
-        }
-
-        double barEndValue = levels[currentLevelIndex + 1].scoreToReach;
-        levelProgressBar.minValue = 0f;
-        levelProgressBar.maxValue = (float)barEndValue;
-        levelProgressBar.value = (float)score;
-        if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
-        if (progressText != null) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
-    }
-
-    private bool IsItemVisible(RectTransform item)
-    {
-        Vector3[] viewportCorners = new Vector3[4];
-        shopScrollRect.viewport.GetWorldCorners(viewportCorners);
-        Vector3 viewportBottomLeft = viewportCorners[0];
-        Vector3 viewportTopRight = viewportCorners[2];
-        Vector3[] itemCorners = new Vector3[4];
-        item.GetWorldCorners(itemCorners);
-        Vector3 itemBottomLeft = itemCorners[0];
-        Vector3 itemTopRight = itemCorners[2];
-        return itemTopRight.y < viewportTopRight.y && itemBottomLeft.y > viewportBottomLeft.y;
-    }
-
-    private void CreateShop()
-    {
-        foreach (var upgrade in upgrades)
-        {
-            GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopContentParent);
-            UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>();
-            buttonUI.Setup(upgrade, this);
-            shopButtons.Add(buttonUI);
-        }
-    }
-
-    private void CheckForLevelUp()
-    {
-        if (currentLevelIndex + 1 < levels.Count)
-        {
-            if (score >= levels[currentLevelIndex + 1].scoreToReach)
-            {
-                currentLevelIndex++;
-                ApplyLevelUp();
-            }
-        }
-    }
-
     private void ApplyLevelUp()
     {
-        AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
+        // ИЗМЕНЕНО: Добавляем проверку, чтобы звук левел-апа не играл в самом конце
+        // Мы проверяем, не является ли текущий уровень последним
+        if (currentLevelIndex < levels.Count - 1)
+        {
+            AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
+        }
 
         if (levels.Count > 0 && currentLevelIndex < levels.Count)
         {
@@ -374,20 +169,113 @@ public class GameManager : MonoBehaviour
         {
             levelUpEffect.Play();
         }
+
+        // --- ДОБАВЛЕНО: ГЛАВНАЯ ПРОВЕРКА НА КОНЦОВКУ ---
+        // Если индекс текущего уровня стал РАВЕН индексу последнего элемента в списке
+        // (например, в списке 10 уровней (индексы 0-9), и мы достигли индекса 9)
+        if (currentLevelIndex == levels.Count - 1)
+        {
+            StartEndingSequence();
+        }
     }
 
+    // --- ДОБАВЛЕНО: НОВЫЙ МЕТОД ДЛЯ ЗАПУСКА КОНЦОВКИ ---
+    private void StartEndingSequence()
+    {
+        // 1. Скрываем основной игровой интерфейс
+        if (mainGamePanel != null)
+        {
+            mainGamePanel.SetActive(false);
+        }
+
+        // 2. Показываем панель концовки
+        if (endingPanel != null)
+        {
+            endingPanel.SetActive(true);
+        }
+
+        // 3. Устанавливаем и показываем текст
+        if (endingText != null)
+        {
+            endingText.text = finalMessage;
+        }
+
+        // 4. Запускаем музыку для концовки через наш обновленный AudioManager
+        if (endingMusic != null)
+        {
+            AudioManager.Instance.PlayMusic(endingMusic);
+        }
+
+        // 5. Запускаем видео
+        if (endingVideoPlayer != null)
+        {
+            endingVideoPlayer.Play();
+        }
+
+        // 6. Отключаем этот скрипт, чтобы остановить игровой процесс (Update, начисление очков и т.д.)
+        this.enabled = false;
+    }
+
+    // Остальная часть вашего кода остается без изменений.
+    // Я просто свернул ее для краткости, но она должна быть в вашем файле.
+    #region Unchanged_Code
+    public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
+    {
+        if (score >= cost) { score -= cost; switch (upgrade.type) { case UpgradeType.PerClick: scorePerClick += upgrade.power; break; case UpgradeType.PerSecond: scorePerSecond += upgrade.power; break; case UpgradeType.ClickMultiplier: clickMultiplier += upgrade.power; break; case UpgradeType.PassiveMultiplier: passiveMultiplier += upgrade.power; break; case UpgradeType.GlobalMultiplier: clickMultiplier += upgrade.power; passiveMultiplier += upgrade.power; break; } int purchasedIndex = shopButtons.IndexOf(button); if (purchasedIndex == unlockedItemsCount - 1) { if (unlockedItemsCount < shopButtons.Count) { unlockedItemsCount++; if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating) { var newItemButton = shopButtons[unlockedItemsCount - 1]; StartCoroutine(AnimateScrollToShowItem(newItemButton.GetComponent<RectTransform>())); } } } button.OnPurchaseSuccess(); UpdateAllShopButtonsState(); }
+    }
+    private void UpdateAllShopButtonsState()
+    {
+        for (int i = 0; i < shopButtons.Count; i++) { if (shopButtons[i] == null) { continue; } bool isUnlocked = (i < unlockedItemsCount); shopButtons[i].SetLockedState(!isUnlocked); if (isUnlocked) { shopButtons[i].UpdateInteractableState(score); } }
+    }
+    private IEnumerator AnimateScrollToShowItem(RectTransform targetItem)
+    {
+        isShopAnimating = true; shopScrollRect.enabled = false; Canvas.ForceUpdateCanvases(); Vector2 startPosition = shopContentRectTransform.anchoredPosition; Vector2 targetPosition = new Vector2(startPosition.x, -targetItem.anchoredPosition.y); Vector2 overshootPosition = targetPosition + new Vector2(0, animationBounceAmount); float timer = 0f; while (timer < 1f) { timer += Time.deltaTime * animationScrollSpeed; shopContentRectTransform.anchoredPosition = Vector2.Lerp(startPosition, overshootPosition, timer); yield return null; }
+        timer = 0f; while (timer < 1f) { timer += Time.deltaTime * animationScrollSpeed * 1.5f; shopContentRectTransform.anchoredPosition = Vector2.Lerp(overshootPosition, targetPosition, timer); yield return null; }
+        shopContentRectTransform.anchoredPosition = targetPosition; isShopAnimating = false; shopScrollRect.enabled = true;
+    }
+    public void OnCatClicked(BaseEventData baseData)
+    {
+        PointerEventData eventData = baseData as PointerEventData; if (eventData == null) return; AudioManager.Instance.PlaySound(catClickSound); double finalScorePerClick = scorePerClick * clickMultiplier; score += finalScorePerClick; CheckForLevelUp(); catImage.transform.localScale = new Vector3(1.1f, 1.1f, 1f); Invoke("ResetCatScale", 0.1f); if (clickTextPrefab != null && canvasTransform != null) { GameObject textGO = Instantiate(clickTextPrefab, canvasTransform); RectTransform canvasRect = canvasTransform.GetComponent<RectTransform>(); Vector2 localPoint; Camera cam = (uiCamera != null) ? uiCamera : Camera.main; RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, eventData.position, cam, out localPoint); textGO.GetComponent<RectTransform>().localPosition = localPoint; TextMeshProUGUI textMesh = textGO.GetComponent<TextMeshProUGUI>(); if (textMesh != null) { textMesh.text = "+" + FormatNumber(finalScorePerClick); } }
+    }
+    public void FeedCat(double cost, float amount)
+    {
+        if (score >= cost) { score -= cost; bool wasAlreadySuperFed = currentSatiety > maxSatiety; currentSatiety += amount; if (!wasAlreadySuperFed && currentSatiety > maxSatiety) { currentSatiety = maxSatiety; } }
+    }
+    public void SuperFeedCat() { currentSatiety = maxSatiety * 2.0f; }
+    public float GetSatietyPercentage()
+    {
+        if (maxSatiety == 0) { return 0; }
+        return currentSatiety / maxSatiety;
+    }
+    private void UpdateAllUITexts()
+    {
+        if (totalScoreText != null) { totalScoreText.text = FormatNumber(score); }
+        if (perSecondText != null) { perSecondText.text = $"{FormatNumber(scorePerSecond * passiveMultiplier)}/сек"; }
+    }
+    private void UpdateProgressBar()
+    {
+        if (levelProgressBar == null) return; if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1) { levelProgressBar.value = 1; if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}"; if (progressText != null) progressText.text = "МАКС."; return; }
+        double barEndValue = levels[currentLevelIndex + 1].scoreToReach; levelProgressBar.minValue = 0f; levelProgressBar.maxValue = (float)barEndValue; levelProgressBar.value = (float)score; if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}"; if (progressText != null) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
+    }
+    private bool IsItemVisible(RectTransform item)
+    {
+        Vector3[] viewportCorners = new Vector3[4]; shopScrollRect.viewport.GetWorldCorners(viewportCorners); Vector3 viewportBottomLeft = viewportCorners[0]; Vector3 viewportTopRight = viewportCorners[2]; Vector3[] itemCorners = new Vector3[4]; item.GetWorldCorners(itemCorners); Vector3 itemBottomLeft = itemCorners[0]; Vector3 itemTopRight = itemCorners[2]; return itemTopRight.y < viewportTopRight.y && itemBottomLeft.y > viewportBottomLeft.y;
+    }
+    private void CreateShop()
+    {
+        foreach (var upgrade in upgrades) { GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopContentParent); UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>(); buttonUI.Setup(upgrade, this); shopButtons.Add(buttonUI); }
+    }
+    private void CheckForLevelUp()
+    {
+        if (currentLevelIndex + 1 < levels.Count) { if (score >= levels[currentLevelIndex + 1].scoreToReach) { currentLevelIndex++; ApplyLevelUp(); } }
+    }
     private string FormatNumber(double number)
     {
-        if (number < 1000) return number.ToString("F0");
-        if (number < 1_000_000) return (number / 1000).ToString("F1") + "K";
-        if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M";
-        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B";
-        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T";
-        return (number / 1_000_000_000_000_000).ToString("F1") + "Qa";
+        if (number < 1000) return number.ToString("F0"); if (number < 1_000_000) return (number / 1000).ToString("F1") + "K"; if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M"; if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B"; if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T"; return (number / 1_000_000_000_000_000).ToString("F1") + "Qa";
     }
-
     private void ResetCatScale()
     {
         catImage.transform.localScale = Vector3.one;
     }
+    #endregion
 }
