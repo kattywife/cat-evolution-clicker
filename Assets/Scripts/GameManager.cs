@@ -53,17 +53,18 @@ public class GameManager : MonoBehaviour
     [Header("Экран Загрузки")]
     public bool enableLoadingScreen = true;
     public GameObject loadingPanel;
-
-    [Tooltip("Перетащи сюда картинку (Image), у которой Type = Filled")]
     public Image loadingFillImage;
-
-    // --- НОВОЕ: Видео плеер для котика на загрузке ---
-    [Tooltip("Сюда перетащи Video Player с анимированным котиком")]
     public VideoPlayer loadingCatVideoPlayer;
-    // ------------------------------------------------
-
-    [Tooltip("Сколько секунд длится фейковая загрузка")]
     public float loadingDuration = 3.0f;
+
+    // --- НОВОЕ: Белая вспышка ---
+    [Header("Переход через Белое")]
+    [Tooltip("Панель с белой картинкой для перехода")]
+    public GameObject whiteFadePanel;
+    [Tooltip("Сколько секунд экран белеет")]
+    public float whiteFadeInDuration = 1.0f;
+    [Tooltip("Сколько секунд белизна исчезает")]
+    public float whiteFadeOutDuration = 1.0f;
 
 
     // --- НАСТРОЙКИ ВСТУПЛЕНИЯ ---
@@ -133,6 +134,7 @@ public class GameManager : MonoBehaviour
         if (postVideoUI != null) postVideoUI.SetActive(false);
         if (introPanel != null) introPanel.SetActive(false);
         if (loadingPanel != null) loadingPanel.SetActive(false);
+        if (whiteFadePanel != null) whiteFadePanel.SetActive(false); // Прячем белую панель
 
         CreateShop();
         UpdateAllShopButtonsState();
@@ -146,7 +148,7 @@ public class GameManager : MonoBehaviour
         }
         else if (enableIntro && introPanel != null)
         {
-            StartCoroutine(StartIntroSequence());
+            StartCoroutine(StartIntroSequence(false)); // false = не было белого перехода
         }
         else
         {
@@ -167,70 +169,96 @@ public class GameManager : MonoBehaviour
 
         if (mainGamePanel != null) mainGamePanel.SetActive(false);
 
-        // --- НОВОЕ: Запускаем видео-котика ---
-        if (loadingCatVideoPlayer != null)
-        {
-            loadingCatVideoPlayer.Play();
-        }
-        // -------------------------------------
+        if (loadingCatVideoPlayer != null) loadingCatVideoPlayer.Play();
 
+        // Прогресс бар
         float timer = 0f;
         while (timer < loadingDuration)
         {
             timer += Time.deltaTime;
             float progress = Mathf.Clamp01(timer / loadingDuration);
-
-            if (loadingFillImage != null)
-            {
-                loadingFillImage.fillAmount = progress;
-            }
-
+            if (loadingFillImage != null) loadingFillImage.fillAmount = progress;
             yield return null;
         }
 
         yield return new WaitForSeconds(0.2f);
 
-        // --- НОВОЕ: Останавливаем видео-котика ---
-        if (loadingCatVideoPlayer != null)
+        // --- НОВОЕ: ПЕРЕХОД В БЕЛОЕ ---
+        if (whiteFadePanel != null)
         {
-            loadingCatVideoPlayer.Stop();
-        }
-        // -----------------------------------------
+            whiteFadePanel.SetActive(true);
+            CanvasGroup whiteCg = whiteFadePanel.GetComponent<CanvasGroup>();
+            if (whiteCg == null) whiteCg = whiteFadePanel.AddComponent<CanvasGroup>();
 
+            whiteCg.alpha = 0f;
+            whiteCg.blocksRaycasts = true; // Блокируем всё
+
+            // Плавно заливаем белым
+            float whiteTimer = 0f;
+            while (whiteTimer < whiteFadeInDuration)
+            {
+                whiteTimer += Time.deltaTime;
+                whiteCg.alpha = Mathf.Lerp(0f, 1f, whiteTimer / whiteFadeInDuration);
+                yield return null;
+            }
+            whiteCg.alpha = 1f;
+        }
+        // ------------------------------
+
+        // Выключаем загрузку (под белым экраном)
+        if (loadingCatVideoPlayer != null) loadingCatVideoPlayer.Stop();
         loadingPanel.SetActive(false);
 
         if (enableIntro && introPanel != null)
         {
-            StartCoroutine(StartIntroSequence());
+            // Запускаем интро, сказав ему, что мы уже "в белом" (true)
+            StartCoroutine(StartIntroSequence(true));
         }
         else
         {
             StartGameImmediately();
+            // Если интро нет, просто убираем белизну
+            if (whiteFadePanel != null) StartCoroutine(FadeOutWhite());
         }
     }
 
     // --- 2. ИНТРО ---
-    private IEnumerator StartIntroSequence()
+    // Добавили параметр: startedFromWhite (пришли ли мы с белого экрана?)
+    private IEnumerator StartIntroSequence(bool startedFromWhite)
     {
         this.enabled = false;
 
         introPanel.SetActive(true);
-        CanvasGroup cg = introPanel.GetComponent<CanvasGroup>();
-        if (cg == null) cg = introPanel.AddComponent<CanvasGroup>();
-        cg.alpha = 1f;
-        cg.blocksRaycasts = true;
+        CanvasGroup introCg = introPanel.GetComponent<CanvasGroup>();
+        if (introCg == null) introCg = introPanel.AddComponent<CanvasGroup>();
+        introCg.alpha = 1f;
+        introCg.blocksRaycasts = true;
 
         if (mainGamePanel != null) mainGamePanel.SetActive(false);
 
+        // Готовим видео
         if (introVideoPlayer != null)
         {
             introVideoPlayer.isLooping = false;
             introVideoPlayer.Prepare();
             while (!introVideoPlayer.isPrepared) yield return null;
             introVideoPlayer.Play();
+        }
+
+        // --- НОВОЕ: Если мы пришли с белого экрана, плавно убираем его ---
+        if (startedFromWhite && whiteFadePanel != null)
+        {
+            StartCoroutine(FadeOutWhite());
+        }
+        // ----------------------------------------------------------------
+
+        // Ждем видео
+        if (introVideoPlayer != null)
+        {
             while (introVideoPlayer.isPlaying) yield return null;
         }
 
+        // Переход к игре
         if (mainGamePanel != null) mainGamePanel.SetActive(true);
 
         float timer = 0f;
@@ -239,7 +267,7 @@ public class GameManager : MonoBehaviour
         while (timer < introFadeDuration)
         {
             timer += Time.deltaTime;
-            cg.alpha = Mathf.Lerp(1f, 0f, timer / introFadeDuration);
+            introCg.alpha = Mathf.Lerp(1f, 0f, timer / introFadeDuration);
 
             if (!hasPlayedEffect && timer > (introFadeDuration * 0.2f))
             {
@@ -253,6 +281,24 @@ public class GameManager : MonoBehaviour
         if (!hasPlayedEffect && levelUpEffect != null) levelUpEffect.Play();
 
         this.enabled = true;
+    }
+
+    // --- Вспомогательная корутина: Убираем белизну ---
+    private IEnumerator FadeOutWhite()
+    {
+        if (whiteFadePanel == null) yield break;
+
+        CanvasGroup whiteCg = whiteFadePanel.GetComponent<CanvasGroup>();
+
+        float timer = 0f;
+        while (timer < whiteFadeOutDuration)
+        {
+            timer += Time.deltaTime;
+            whiteCg.alpha = Mathf.Lerp(1f, 0f, timer / whiteFadeOutDuration);
+            yield return null;
+        }
+
+        whiteFadePanel.SetActive(false);
     }
 
     // --- 3. МГНОВЕННЫЙ ЗАПУСК ---
