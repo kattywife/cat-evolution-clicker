@@ -1,6 +1,3 @@
-// GameManager.cs
-// Полная и отформатированная версия
-
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -8,7 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.EventSystems;
 using UnityEngine.Video;
-using UnityEngine.SceneManagement; // Необходимо для перезагрузки сцены
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -54,6 +51,11 @@ public class GameManager : MonoBehaviour
 
     // --- ССЫЛКИ НА ЭЛЕМЕНТЫ КОНЦОВКИ ---
     [Header("Ссылки на элементы Концовки")]
+    [Tooltip("Задержка перед началом видео (в секундах)")]
+    public float endingDelay = 3.0f;
+    [Tooltip("Как долго панель будет плавно появляться (в секундах)")]
+    public float endingFadeDuration = 2.0f;
+
     [Tooltip("Панель с основным игровым UI (кот, магазин), которая будет скрыта")]
     public GameObject mainGamePanel;
     [Tooltip("Главная панель концовки (должна содержать видео и PostVideoUI)")]
@@ -68,6 +70,12 @@ public class GameManager : MonoBehaviour
 
     [Header("Эффекты")]
     public ParticleSystem levelUpEffect;
+
+    // --- НОВОЕ: Сюда перетащи объект со слезками (Particle System) ---
+    [Tooltip("Объект с эффектом слез, который будем двигать")]
+    public GameObject tearEffectObject;
+    // -----------------------------------------------------------------
+
     public GameObject clickTextPrefab;
     public Transform canvasTransform;
 
@@ -136,9 +144,22 @@ public class GameManager : MonoBehaviour
         }
 
         double effectiveSps = finalScorePerSecond;
+
+        // Логика слез: если голоден - включаем, если сыт - выключаем
         if (currentSatiety <= 0)
         {
             effectiveSps *= satietyPenaltyMultiplier;
+            if (tearEffectObject != null && !tearEffectObject.activeSelf)
+            {
+                tearEffectObject.SetActive(true);
+            }
+        }
+        else
+        {
+            if (tearEffectObject != null && tearEffectObject.activeSelf)
+            {
+                tearEffectObject.SetActive(false);
+            }
         }
 
         if (effectiveSps > 0)
@@ -161,33 +182,61 @@ public class GameManager : MonoBehaviour
 
     // --- ЛОГИКА КОНЦОВКИ ---
 
+    private IEnumerator WaitAndStartEnding()
+    {
+        yield return new WaitForSeconds(endingDelay);
+        StartEndingSequence();
+    }
+
     private void StartEndingSequence()
     {
+        if (endingPanel != null)
+        {
+            CanvasGroup cg = endingPanel.GetComponent<CanvasGroup>();
+            if (cg == null)
+            {
+                cg = endingPanel.AddComponent<CanvasGroup>();
+            }
+
+            cg.alpha = 0f;
+            endingPanel.SetActive(true);
+
+            if (endingVideoPlayer != null)
+            {
+                endingVideoPlayer.isLooping = false;
+                endingVideoPlayer.loopPointReached += OnVideoFinished;
+                endingVideoPlayer.Play();
+            }
+
+            // Если ты добавила музыку через AudioSource на панели, эта строка не обязательна,
+            // но я оставлю её как запасной вариант.
+            if (endingMusic != null)
+            {
+                AudioManager.Instance.PlayMusic(endingMusic);
+            }
+
+            StartCoroutine(FadeInEndingPanel(cg));
+        }
+        else
+        {
+            this.enabled = false;
+        }
+    }
+
+    private IEnumerator FadeInEndingPanel(CanvasGroup cg)
+    {
+        float timer = 0f;
+        while (timer < endingFadeDuration)
+        {
+            timer += Time.deltaTime;
+            cg.alpha = Mathf.Lerp(0f, 1f, timer / endingFadeDuration);
+            yield return null;
+        }
+        cg.alpha = 1f;
+
         if (mainGamePanel != null)
         {
             mainGamePanel.SetActive(false);
-        }
-
-        if (endingPanel != null)
-        {
-            endingPanel.SetActive(true);
-        }
-
-        if (postVideoUI != null)
-        {
-            postVideoUI.SetActive(false);
-        }
-
-        if (endingMusic != null)
-        {
-            AudioManager.Instance.PlayMusic(endingMusic);
-        }
-
-        if (endingVideoPlayer != null)
-        {
-            endingVideoPlayer.isLooping = false;
-            endingVideoPlayer.loopPointReached += OnVideoFinished;
-            endingVideoPlayer.Play();
         }
 
         this.enabled = false;
@@ -213,9 +262,7 @@ public class GameManager : MonoBehaviour
     public void ExitGame()
     {
         Application.Quit();
-
 #if UNITY_EDITOR
-        Debug.Log("Выход из игры (работает только в собранном приложении).");
         UnityEditor.EditorApplication.isPlaying = false;
 #endif
     }
@@ -226,10 +273,7 @@ public class GameManager : MonoBehaviour
     public void OnCatClicked(BaseEventData baseData)
     {
         PointerEventData eventData = baseData as PointerEventData;
-        if (eventData == null)
-        {
-            return;
-        }
+        if (eventData == null) return;
 
         AudioManager.Instance.PlaySound(catClickSound);
 
@@ -270,7 +314,7 @@ public class GameManager : MonoBehaviour
 
     private void ApplyLevelUp()
     {
-        if (currentLevelIndex < levels.Count - 1)
+        if (levelUpSound != null)
         {
             AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
         }
@@ -279,6 +323,14 @@ public class GameManager : MonoBehaviour
         {
             catImage.sprite = levels[currentLevelIndex].catSprite;
             catImage.SetNativeSize();
+
+            // --- НОВОЕ: Обновляем позицию слез ---
+            if (tearEffectObject != null)
+            {
+                // Берем координаты из LevelData и применяем к объекту слез
+                tearEffectObject.transform.localPosition = levels[currentLevelIndex].tearPosition;
+            }
+            // -------------------------------------
         }
 
         if (levelUpEffect != null)
@@ -288,7 +340,13 @@ public class GameManager : MonoBehaviour
 
         if (currentLevelIndex == levels.Count - 1)
         {
-            StartEndingSequence();
+            satietyDepletionRate = 0f;
+            currentSatiety = maxSatiety;
+
+            // На финальном уровне слезы выключаем принудительно
+            if (tearEffectObject != null) tearEffectObject.SetActive(false);
+
+            StartCoroutine(WaitAndStartEnding());
         }
     }
 
@@ -325,7 +383,6 @@ public class GameManager : MonoBehaviour
                 if (unlockedItemsCount < shopButtons.Count)
                 {
                     unlockedItemsCount++;
-
                     if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating)
                     {
                         var newItemButton = shopButtons[unlockedItemsCount - 1];
@@ -376,10 +433,7 @@ public class GameManager : MonoBehaviour
     {
         for (int i = 0; i < shopButtons.Count; i++)
         {
-            if (shopButtons[i] == null)
-            {
-                continue;
-            }
+            if (shopButtons[i] == null) continue;
 
             bool isUnlocked = (i < unlockedItemsCount);
             shopButtons[i].SetLockedState(!isUnlocked);
@@ -405,22 +459,13 @@ public class GameManager : MonoBehaviour
 
     private void UpdateProgressBar()
     {
-        if (levelProgressBar == null)
-        {
-            return;
-        }
+        if (levelProgressBar == null) return;
 
         if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1)
         {
             levelProgressBar.value = 1;
-            if (levelNumberText != null)
-            {
-                levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
-            }
-            if (progressText != null)
-            {
-                progressText.text = "МАКС.";
-            }
+            if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
+            if (progressText != null) progressText.text = "МАКС.";
             return;
         }
 
@@ -429,18 +474,12 @@ public class GameManager : MonoBehaviour
         levelProgressBar.maxValue = (float)barEndValue;
         levelProgressBar.value = (float)score;
 
-        if (levelNumberText != null)
-        {
-            levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
-        }
-        if (progressText != null)
-        {
-            progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
-        }
+        if (levelNumberText != null) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
+        if (progressText != null) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
     }
 
 
-    // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ И АНИМАЦИИ ---
+    // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
 
     private IEnumerator AnimateScrollToShowItem(RectTransform targetItem)
     {
@@ -463,7 +502,7 @@ public class GameManager : MonoBehaviour
         timer = 0f;
         while (timer < 1f)
         {
-            timer += Time.deltaTime * animationScrollSpeed * 1.5f; // Возвращаемся чуть быстрее
+            timer += Time.deltaTime * animationScrollSpeed * 1.5f;
             shopContentRectTransform.anchoredPosition = Vector2.Lerp(overshootPosition, targetPosition, timer);
             yield return null;
         }
@@ -475,10 +514,7 @@ public class GameManager : MonoBehaviour
 
     public float GetSatietyPercentage()
     {
-        if (maxSatiety == 0)
-        {
-            return 0;
-        }
+        if (maxSatiety == 0) return 0;
         return currentSatiety / maxSatiety;
     }
 

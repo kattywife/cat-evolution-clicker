@@ -1,5 +1,3 @@
-//LevelData
-
 using UnityEngine;
 
 // Эта строка позволяет создавать ассеты этого типа прямо в меню Unity
@@ -11,4 +9,7 @@ public class LevelData : ScriptableObject
 
     [Tooltip("Спрайт котика для этого уровня")]
     public Sprite catSprite;
+
+    [Tooltip("Координаты слез (X, Y) для этого уровня. Посмотри их в инспекторе, подвигав объект слез.")]
+    public Vector2 tearPosition; // <--- НОВОЕ ПОЛЕ
 }
