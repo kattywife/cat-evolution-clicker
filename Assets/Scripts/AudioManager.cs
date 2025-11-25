@@ -8,7 +8,6 @@ public class AudioManager : MonoBehaviour
     [Tooltip("Источник звука для одиночных эффектов (UI, клики и т.д.)")]
     public AudioSource sfxSource;
 
-    // --- ДОБАВЛЕНО: Отдельный источник для фоновой музыки ---
     [Tooltip("Источник звука для фоновой музыки")]
     public AudioSource musicSource;
 
@@ -22,6 +21,7 @@ public class AudioManager : MonoBehaviour
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
+            // Загружаем состояние (1 = выключено, 0 = включено)
             isMuted = PlayerPrefs.GetInt(MutePrefKey, 0) == 1;
             ApplyMuteState();
         }
@@ -31,40 +31,30 @@ public class AudioManager : MonoBehaviour
         }
     }
 
-    // Метод для коротких звуков остался без изменений
     public void PlaySound(AudioClip clip, float volume = 1.0f)
     {
         if (clip != null && sfxSource != null)
         {
+            // PlayOneShot играет, даже если source.loop = false
             sfxSource.PlayOneShot(clip, volume);
         }
     }
 
-    // --- ДОБАВЛЕНО: Новый метод для проигрывания фоновой музыки ---
-    /// <summary>
-    /// Проигрывает фоновую музыку. Останавливает предыдущую, если она играла.
-    /// </summary>
-    /// <param name="musicClip">Аудиоклип для проигрывания.</param>
     public void PlayMusic(AudioClip musicClip)
     {
-        // Проверяем, что есть и источник, и клип
         if (musicClip != null && musicSource != null)
         {
-            // Если уже играет та же музыка, ничего не делаем
             if (musicSource.clip == musicClip && musicSource.isPlaying)
             {
                 return;
             }
 
-            musicSource.Stop(); // Останавливаем текущую музыку
-            musicSource.clip = musicClip; // Назначаем новый клип
-            musicSource.loop = true; // Делаем музыку зацикленной
-            musicSource.Play(); // Включаем!
+            musicSource.Stop();
+            musicSource.clip = musicClip;
+            musicSource.loop = true;
+            musicSource.Play();
         }
     }
-
-
-    // --- Управление общим звуком (без изменений) ---
 
     public void ToggleMute()
     {
@@ -77,8 +67,19 @@ public class AudioManager : MonoBehaviour
 
     private void ApplyMuteState()
     {
-        // AudioListener.volume - это глобальная громкость, она повлияет на ВСЕ источники звука
-        AudioListener.volume = isMuted ? 0f : 1f;
+        // ВАЖНОЕ ИЗМЕНЕНИЕ:
+        // Мы больше не трогаем AudioListener.volume (это выключило бы всё).
+        // Мы выключаем только конкретные источники звука ИГРЫ.
+
+        if (sfxSource != null)
+        {
+            sfxSource.mute = isMuted;
+        }
+
+        if (musicSource != null)
+        {
+            musicSource.mute = isMuted;
+        }
     }
 
     public bool IsMuted()
