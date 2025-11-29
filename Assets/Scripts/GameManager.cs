@@ -348,8 +348,15 @@ public class GameManager : MonoBehaviour
     void OnVideoFinished(VideoPlayer vp) { if (postVideoUI != null) postVideoUI.SetActive(true); vp.loopPointReached -= OnVideoFinished; }
     public float GetSatietyPercentage() { return maxSatiety == 0 ? 0 : currentSatiety / maxSatiety; }
     private void ResetCatScale() { catImage.transform.localScale = Vector3.one; }
-    private string FormatNumber(double number) { if (number < 1000) return number.ToString("F0"); if (number < 1_000_000) return (number / 1000).ToString("F1") + "K"; if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M"; if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B"; if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T"; return (number / 1_000_000_000_000_000).ToString("F1") + "Qa"; }
-
+    private string FormatNumber(double number)
+    {
+        if (number < 1000) return number.ToString("F0");
+        if (number < 1_000_000) return (number / 1000).ToString("F1") + "Ê"; // Òûñÿ÷è
+        if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "Ì"; // Ìèëëèîíû
+        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "Á"; // Ìèëëèàðäû
+        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Ò"; // Òðèëëèîíû
+        return (number / 1_000_000_000_000_000).ToString("F1") + "Êâ"; // Êâàäðèëëèîíû
+    }
     // --- ÂÑÒÀÂÈÒÜ ÏÅÐÅÄ ÏÎÑËÅÄÍÅÉ ÇÀÊÐÛÂÀÞÙÅÉ ÑÊÎÁÊÎÉ ÑÊÐÈÏÒÀ ---
 
     public void RestartGame()
