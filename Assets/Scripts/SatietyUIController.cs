@@ -231,7 +231,7 @@ public class SatietyUIController : MonoBehaviour
 
     void OnSuperFeedButtonClicked()
     {
-        gameManager.SuperFeedCat();
+        gameManager.WatchAdForSuperFood();
     }
 
     public void PlayFeedButtonHoverSound()
