@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using UnityEngine.EventSystems;
 using UnityEngine.Video;
 using UnityEngine.SceneManagement;
-using System.Runtime.InteropServices;
 
 
 public class GameManager : MonoBehaviour
@@ -74,7 +73,9 @@ public class GameManager : MonoBehaviour
     public bool enableIntro = true;
     public GameObject introPanel;
     public VideoPlayer introVideoPlayer;
-    public float introFadeDuration = 1.5f;
+
+    [Tooltip("Сколько времени видео висит после окончания перед белой вспышкой")]
+    public float introFadeDuration = 0.5f; // Переиспользовали переменную для паузы
 
     [Header("Концовка")]
     public float endingDelay = 3.0f;
@@ -184,6 +185,182 @@ public class GameManager : MonoBehaviour
 
 
     // =========================================================
+    // ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА (Loading -> White -> Intro -> White -> Game)
+    // =========================================================
+
+    private IEnumerator PlayLoadingSequence()
+    {
+        this.enabled = false;
+        loadingPanel.SetActive(true);
+        SetupCanvasGroup(loadingPanel);
+
+        if (mainGamePanel) mainGamePanel.SetActive(false);
+        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Play();
+
+        float timer = 0f;
+        while (timer < loadingDuration)
+        {
+            timer += Time.deltaTime;
+            if (loadingFillImage)
+                loadingFillImage.fillAmount = Mathf.Clamp01(timer / loadingDuration);
+            yield return null;
+        }
+
+        if (YandexManager.Instance != null) YandexManager.Instance.ReportGameReady();
+
+        yield return new WaitForSeconds(0.2f);
+
+        // Переход в белое (Loading -> Intro)
+        if (whiteFadePanel)
+        {
+            whiteFadePanel.SetActive(true);
+            CanvasGroup w = SetupCanvasGroup(whiteFadePanel);
+            w.alpha = 0;
+            float t = 0;
+            while (t < whiteFadeInDuration)
+            {
+                t += Time.deltaTime;
+                w.alpha = Mathf.Lerp(0, 1, t / whiteFadeInDuration);
+                yield return null;
+            }
+            w.alpha = 1;
+        }
+
+        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Stop();
+        loadingPanel.SetActive(false);
+
+        if (enableIntro && introPanel)
+            StartCoroutine(StartIntroSequence(true));
+        else
+        {
+            StartGameImmediately();
+            if (whiteFadePanel) StartCoroutine(FadeOutWhite());
+        }
+    }
+
+    private IEnumerator StartIntroSequence(bool startedFromWhite)
+    {
+        this.enabled = false;
+        introPanel.SetActive(true);
+        SetupCanvasGroup(introPanel);
+
+        if (mainGamePanel) mainGamePanel.SetActive(false);
+
+        // Подготовка видео
+        if (introVideoPlayer)
+        {
+            introVideoPlayer.isLooping = false;
+            introVideoPlayer.Prepare();
+            while (!introVideoPlayer.isPrepared) yield return null;
+            introVideoPlayer.Play();
+        }
+
+        // Убираем белую вспышку (которая пришла из загрузки)
+        if (startedFromWhite && whiteFadePanel) StartCoroutine(FadeOutWhite());
+
+        // Ждем пока видео играет
+        if (introVideoPlayer)
+        {
+            while (introVideoPlayer.isPlaying) yield return null;
+        }
+
+        // --- НОВАЯ ЛОГИКА: ПЕРЕХОД В БЕЛОЕ (Intro -> Game) ---
+
+        // Получаем аудио для затухания
+        AudioSource videoAudio = (introVideoPlayer != null) ? introVideoPlayer.GetComponent<AudioSource>() : null;
+        float startVolume = (videoAudio != null) ? videoAudio.volume : 1f;
+
+        // 1. Заливаем экран белым
+        if (whiteFadePanel)
+        {
+            whiteFadePanel.SetActive(true);
+            CanvasGroup w = SetupCanvasGroup(whiteFadePanel);
+            w.alpha = 0;
+
+            float t = 0;
+            // Используем whiteFadeInDuration для скорости заливки
+            while (t < whiteFadeInDuration)
+            {
+                t += Time.deltaTime;
+                float progress = t / whiteFadeInDuration;
+
+                // Белеем
+                w.alpha = Mathf.Lerp(0, 1, progress);
+
+                // Одновременно заглушаем звук интро
+                if (videoAudio != null)
+                    videoAudio.volume = Mathf.Lerp(startVolume, 0f, progress);
+
+                yield return null;
+            }
+            w.alpha = 1;
+        }
+
+        // 2. Меняем панели под прикрытием белого экрана
+        introPanel.SetActive(false);
+        if (mainGamePanel) mainGamePanel.SetActive(true);
+
+        // 3. Убираем белую вспышку (открываем игру)
+        if (whiteFadePanel)
+        {
+            CanvasGroup w = whiteFadePanel.GetComponent<CanvasGroup>();
+            float t = 0;
+            bool playedEffect = false;
+
+            while (t < whiteFadeOutDuration)
+            {
+                t += Time.deltaTime;
+                w.alpha = Mathf.Lerp(1, 0, t / whiteFadeOutDuration);
+
+                // Эффект появления кота (когда экран чуть посветлел)
+                if (!playedEffect && t > whiteFadeOutDuration * 0.1f)
+                {
+                    if (levelUpEffect) levelUpEffect.Play();
+                    playedEffect = true;
+                }
+                yield return null;
+            }
+            whiteFadePanel.SetActive(false);
+            if (!playedEffect && levelUpEffect) levelUpEffect.Play();
+        }
+
+        this.enabled = true; // СТАРТ ИГРЫ
+    }
+
+    private IEnumerator FadeOutWhite()
+    {
+        if (whiteFadePanel)
+        {
+            CanvasGroup c = whiteFadePanel.GetComponent<CanvasGroup>();
+            float t = 0;
+            while (t < whiteFadeOutDuration)
+            {
+                t += Time.deltaTime;
+                c.alpha = Mathf.Lerp(1, 0, t / whiteFadeOutDuration);
+                yield return null;
+            }
+            whiteFadePanel.SetActive(false);
+        }
+    }
+
+    private void StartGameImmediately()
+    {
+        if (mainGamePanel) mainGamePanel.SetActive(true);
+        if (levelUpEffect) levelUpEffect.Play();
+        this.enabled = true;
+    }
+
+    private CanvasGroup SetupCanvasGroup(GameObject panel)
+    {
+        CanvasGroup cg = panel.GetComponent<CanvasGroup>();
+        if (cg == null) cg = panel.AddComponent<CanvasGroup>();
+        cg.alpha = 1f;
+        cg.blocksRaycasts = true;
+        return cg;
+    }
+
+
+    // =========================================================
     // ОСНОВНОЙ ИГРОВОЙ ЦИКЛ (UPDATE)
     // =========================================================
 
@@ -191,7 +368,7 @@ public class GameManager : MonoBehaviour
     {
         if (!this.enabled) return;
 
-        // --- 1. ЛОГИКА ИСЧЕЗНОВЕНИЯ КНОПКИ Х2 ---
+        // 1. Таймер кнопки удвоения
         if (currentDoubleScoreTimer > 0)
         {
             currentDoubleScoreTimer -= Time.deltaTime;
@@ -210,7 +387,6 @@ public class GameManager : MonoBehaviour
                 doubleScoreButton.gameObject.SetActive(true);
             }
         }
-        // ----------------------------------------
 
         // 2. Клик пробелом
         if (Input.GetKeyDown(KeyCode.Space))
@@ -264,7 +440,7 @@ public class GameManager : MonoBehaviour
 
 
     // =========================================================
-    // ПОКУПКИ (С ИСПРАВЛЕННОЙ МАТЕМАТИКОЙ)
+    // ПОКУПКИ
     // =========================================================
 
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
@@ -275,8 +451,6 @@ public class GameManager : MonoBehaviour
 
             switch (upgrade.type)
             {
-                // ИСПРАВЛЕНИЕ: Делим добавку на текущий множитель, чтобы
-                // итоговый прирост (после умножения) был ровно таким, как написано на кнопке.
                 case UpgradeType.PerClick:
                     if (clickMultiplier > 0)
                         scorePerClick += upgrade.power / clickMultiplier;
@@ -291,7 +465,6 @@ public class GameManager : MonoBehaviour
                         scorePerSecond += upgrade.power;
                     break;
 
-                // Множители работают через умножение (*=)
                 case UpgradeType.ClickMultiplier:
                     clickMultiplier *= upgrade.power;
                     break;
@@ -346,7 +519,6 @@ public class GameManager : MonoBehaviour
             if (score > 0) score *= 2;
             else score += 100;
 
-            // Запускаем таймер (кнопка исчезнет в Update)
             currentDoubleScoreTimer = doubleScoreCooldown;
         }
 
@@ -357,139 +529,6 @@ public class GameManager : MonoBehaviour
     public void SuperFeedCat()
     {
         currentSatiety = maxSatiety * 2.0f;
-    }
-
-
-    // =========================================================
-    // ЗАПУСК И ЭКРАНЫ
-    // =========================================================
-
-    private IEnumerator PlayLoadingSequence()
-    {
-        this.enabled = false;
-        loadingPanel.SetActive(true);
-        SetupCanvasGroup(loadingPanel);
-
-        if (mainGamePanel) mainGamePanel.SetActive(false);
-        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Play();
-
-        float timer = 0f;
-        while (timer < loadingDuration)
-        {
-            timer += Time.deltaTime;
-            if (loadingFillImage)
-                loadingFillImage.fillAmount = Mathf.Clamp01(timer / loadingDuration);
-            yield return null;
-        }
-
-        if (YandexManager.Instance != null) YandexManager.Instance.ReportGameReady();
-
-        yield return new WaitForSeconds(0.2f);
-
-        if (whiteFadePanel)
-        {
-            whiteFadePanel.SetActive(true);
-            CanvasGroup w = SetupCanvasGroup(whiteFadePanel);
-            w.alpha = 0;
-            float t = 0;
-            while (t < whiteFadeInDuration)
-            {
-                t += Time.deltaTime;
-                w.alpha = Mathf.Lerp(0, 1, t / whiteFadeInDuration);
-                yield return null;
-            }
-            w.alpha = 1;
-        }
-
-        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Stop();
-        loadingPanel.SetActive(false);
-
-        if (enableIntro && introPanel)
-            StartCoroutine(StartIntroSequence(true));
-        else
-        {
-            StartGameImmediately();
-            if (whiteFadePanel) StartCoroutine(FadeOutWhite());
-        }
-    }
-
-    private IEnumerator StartIntroSequence(bool startedFromWhite)
-    {
-        this.enabled = false;
-        introPanel.SetActive(true);
-        SetupCanvasGroup(introPanel);
-
-        if (mainGamePanel) mainGamePanel.SetActive(false);
-
-        if (introVideoPlayer)
-        {
-            introVideoPlayer.isLooping = false;
-            introVideoPlayer.Prepare();
-            while (!introVideoPlayer.isPrepared) yield return null;
-            introVideoPlayer.Play();
-        }
-
-        if (startedFromWhite && whiteFadePanel) StartCoroutine(FadeOutWhite());
-
-        if (introVideoPlayer)
-        {
-            while (introVideoPlayer.isPlaying) yield return null;
-        }
-
-        if (mainGamePanel) mainGamePanel.SetActive(true);
-
-        AudioSource videoAudio = (introVideoPlayer != null) ? introVideoPlayer.GetComponent<AudioSource>() : null;
-        float startVolume = (videoAudio != null) ? videoAudio.volume : 1f;
-
-        CanvasGroup introCg = introPanel.GetComponent<CanvasGroup>();
-        float t = 0f;
-        bool playedEffect = false;
-
-        while (t < introFadeDuration)
-        {
-            t += Time.deltaTime;
-            float progress = t / introFadeDuration;
-
-            introCg.alpha = Mathf.Lerp(1, 0, progress);
-
-            if (videoAudio != null)
-                videoAudio.volume = Mathf.Lerp(startVolume, 0f, progress);
-
-            if (!playedEffect && t > introFadeDuration * 0.2f)
-            {
-                if (levelUpEffect) levelUpEffect.Play();
-                playedEffect = true;
-            }
-            yield return null;
-        }
-
-        introPanel.SetActive(false);
-        if (!playedEffect && levelUpEffect) levelUpEffect.Play();
-
-        this.enabled = true;
-    }
-
-    private IEnumerator FadeOutWhite()
-    {
-        if (whiteFadePanel)
-        {
-            CanvasGroup c = whiteFadePanel.GetComponent<CanvasGroup>();
-            float t = 0;
-            while (t < whiteFadeOutDuration)
-            {
-                t += Time.deltaTime;
-                c.alpha = Mathf.Lerp(1, 0, t / whiteFadeOutDuration);
-                yield return null;
-            }
-            whiteFadePanel.SetActive(false);
-        }
-    }
-
-    private void StartGameImmediately()
-    {
-        if (mainGamePanel) mainGamePanel.SetActive(true);
-        if (levelUpEffect) levelUpEffect.Play();
-        this.enabled = true;
     }
 
 
@@ -711,7 +750,6 @@ public class GameManager : MonoBehaviour
 
     void OnVideoFinished(VideoPlayer vp)
     {
-        // Пауза вместо стопа, чтобы не было черного экрана
         if (vp.frameCount > 0) vp.frame = (long)(vp.frameCount - 5);
         vp.Pause();
 
@@ -741,14 +779,5 @@ public class GameManager : MonoBehaviour
         if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "Б";
         if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Т";
         return (number / 1_000_000_000_000_000).ToString("F1") + "Кв";
-    }
-
-    private CanvasGroup SetupCanvasGroup(GameObject panel)
-    {
-        CanvasGroup cg = panel.GetComponent<CanvasGroup>();
-        if (cg == null) cg = panel.AddComponent<CanvasGroup>();
-        cg.alpha = 1f;
-        cg.blocksRaycasts = true;
-        return cg;
     }
 }
