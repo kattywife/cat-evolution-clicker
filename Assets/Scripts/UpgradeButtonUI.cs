@@ -1,10 +1,9 @@
-// UpgradeButtonUI.cs
-
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.EventSystems;
 using System.Collections;
+
 
 public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
@@ -30,6 +29,10 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     private GameManager gameManager;
     private Vector3 originalScale;
 
+    // --- ЗАЩИТА ОТ ДВОЙНОГО КЛИКА ---
+    private float lastClickTime = 0f;
+    private const float CLICK_COOLDOWN = 0.2f; // Задержка 0.2 секунды
+
     void Awake()
     {
         originalScale = transform.localScale;
@@ -42,32 +45,39 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         currentLevel = 0;
         currentCost = currentUpgradeData.baseCost;
 
-        purchaseButton.onClick.RemoveAllListeners();
-        purchaseButton.onClick.AddListener(OnPurchaseClicked);
+        // Чистим старые и добавляем новые события
+        if (purchaseButton != null)
+        {
+            purchaseButton.onClick.RemoveAllListeners();
+            purchaseButton.onClick.AddListener(OnPurchaseClicked);
+        }
 
         UpdateTextAndIcons();
     }
 
     public void SetLockedState(bool isLocked)
     {
-        if (lockIcon != null)
-        {
-            lockIcon.SetActive(isLocked);
-        }
+        if (lockIcon != null) lockIcon.SetActive(isLocked);
+        if (nameText != null) nameText.gameObject.SetActive(!isLocked);
+        if (effectText != null) effectText.gameObject.SetActive(!isLocked);
+        if (priceText != null) priceText.gameObject.SetActive(!isLocked);
+        if (iconImage != null) iconImage.gameObject.SetActive(!isLocked);
 
-        nameText.gameObject.SetActive(!isLocked);
-        effectText.gameObject.SetActive(!isLocked);
-        priceText.gameObject.SetActive(!isLocked);
-        iconImage.gameObject.SetActive(!isLocked);
-
-        // --- ВОТ ИСПРАВЛЕНИЕ ---
-        // Мы не выключаем объект кнопки, а делаем ее НЕИНТЕРАКТИВНОЙ
-        purchaseButton.interactable = !isLocked;
+        if (purchaseButton != null) purchaseButton.interactable = !isLocked;
     }
 
     public void OnPurchaseClicked()
     {
-        if (gameManager.score >= currentCost)
+        // --- ПРОВЕРКА ЗАЩИТЫ ---
+        // Если с прошлого клика прошло слишком мало времени - игнорируем этот клик
+        if (Time.time - lastClickTime < CLICK_COOLDOWN)
+        {
+            return;
+        }
+        lastClickTime = Time.time; // Обновляем время последнего клика
+        // -----------------------
+
+        if (gameManager != null && gameManager.score >= currentCost)
         {
             gameManager.PurchaseUpgrade(currentUpgradeData, currentCost, this);
         }
@@ -83,59 +93,64 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
     public void UpdateInteractableState(double currentScore)
     {
-        // Эта функция теперь снова работает как надо:
-        // она управляет доступностью только для РАЗБЛОКИРОВАННЫХ товаров
-        purchaseButton.interactable = currentScore >= currentCost;
+        if (purchaseButton != null)
+        {
+            purchaseButton.interactable = currentScore >= currentCost;
+        }
     }
 
     public bool IsInteractable()
     {
-        if (purchaseButton != null)
-        {
-            return purchaseButton.interactable;
-        }
-        return false;
+        return purchaseButton != null && purchaseButton.interactable;
     }
 
     public void UpdateTextAndIcons()
     {
-        nameText.text = currentUpgradeData.upgradeName;
-        iconImage.sprite = currentUpgradeData.icon;
-        priceText.text = FormatNumber(currentCost);
+        if (currentUpgradeData == null) return;
 
-        switch (currentUpgradeData.type)
+        if (nameText != null) nameText.text = currentUpgradeData.upgradeName;
+        if (iconImage != null) iconImage.sprite = currentUpgradeData.icon;
+        if (priceText != null) priceText.text = FormatNumber(currentCost);
+
+        if (effectText != null)
         {
-            case UpgradeType.PerClick:
-                effectText.text = $"+{FormatNumber(currentUpgradeData.power)} за клик";
-                break;
-            case UpgradeType.PerSecond:
-                effectText.text = $"+{FormatNumber(currentUpgradeData.power)} в секунду";
-                break;
-            case UpgradeType.ClickMultiplier:
-                effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% за клик";
-                break;
-            case UpgradeType.PassiveMultiplier:
-                effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% в секунду";
-                break;
-            case UpgradeType.GlobalMultiplier:
-                effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% ко всему";
-                break;
+            switch (currentUpgradeData.type)
+            {
+                case UpgradeType.PerClick:
+                    effectText.text = $"+{FormatNumber(currentUpgradeData.power)} за клик";
+                    break;
+                case UpgradeType.PerSecond:
+                    effectText.text = $"+{FormatNumber(currentUpgradeData.power)} в секунду";
+                    break;
+                case UpgradeType.ClickMultiplier:
+                    effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% за клик";
+                    break;
+                case UpgradeType.PassiveMultiplier:
+                    effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% в секунду";
+                    break;
+                case UpgradeType.GlobalMultiplier:
+                    effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% ко всему";
+                    break;
+            }
         }
     }
+
     public void OnPointerEnter(PointerEventData eventData)
     {
-        if (purchaseButton.interactable)
+        if (purchaseButton != null && purchaseButton.interactable)
         {
             AudioManager.Instance.PlaySound(hoverSound);
             StopAllCoroutines();
             StartCoroutine(ScaleOverTime(originalScale * scaleFactor, animationDuration));
         }
     }
+
     public void OnPointerExit(PointerEventData eventData)
     {
         StopAllCoroutines();
         StartCoroutine(ScaleOverTime(originalScale, animationDuration));
     }
+
     private IEnumerator ScaleOverTime(Vector3 targetScale, float duration)
     {
         Vector3 initialScale = transform.localScale;
@@ -149,13 +164,14 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         }
         transform.localScale = targetScale;
     }
+
     private string FormatNumber(double number)
     {
         if (number < 1000) return number.ToString("F0");
-        if (number < 1_000_000) return (number / 1000).ToString("F1") + "K";
-        if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M";
-        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B";
-        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T";
-        return (number / 1_000_000_000_000_000).ToString("F1") + "Qa";
+        if (number < 1_000_000) return (number / 1000).ToString("F1") + "К";
+        if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "М";
+        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "Б";
+        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Т";
+        return (number / 1_000_000_000_000_000).ToString("F1") + "Кв";
     }
 }
