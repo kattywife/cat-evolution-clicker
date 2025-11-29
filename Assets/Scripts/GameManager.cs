@@ -10,8 +10,11 @@ using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
-    // --- ДАННЫЕ ИГРЫ ---
-    [Header("Настройки")]
+    // =========================================================
+    // НАСТРОЙКИ И ДАННЫЕ
+    // =========================================================
+
+    [Header("Данные игры")]
     public List<LevelData> levels;
     public List<UpgradeData> upgrades;
 
@@ -19,7 +22,7 @@ public class GameManager : MonoBehaviour
     public AudioClip catClickSound;
     public AudioClip levelUpSound;
 
-    // --- ПЕРЕМЕННЫЕ ГЕЙМПЛЕЯ ---
+    // --- ГЕЙМПЛЕЙ ---
     [Header("Состояние")]
     public double score = 0;
     private double scorePerClick = 1;
@@ -31,8 +34,8 @@ public class GameManager : MonoBehaviour
     public float satietyDepletionRate = 0.5f;
     public float satietyPenaltyMultiplier = 0.1f;
 
-    // --- UI ССЫЛКИ ---
-    [Header("UI Элементы")]
+    // --- UI ЭЛЕМЕНТЫ ---
+    [Header("UI Ссылки")]
     public TextMeshProUGUI totalScoreText;
     public TextMeshProUGUI perSecondText;
     public Image catImage;
@@ -45,7 +48,7 @@ public class GameManager : MonoBehaviour
     public GameObject exitButton;
     public GameObject restartButton;
 
-    // --- ЭКРАНЫ И ЗАСТАВКИ ---
+    // --- ЭКРАНЫ ---
     [Header("Экран Загрузки")]
     public bool enableLoadingScreen = true;
     public GameObject loadingPanel;
@@ -65,7 +68,6 @@ public class GameManager : MonoBehaviour
     public VideoPlayer introVideoPlayer;
     public float introFadeDuration = 1.5f;
 
-    // --- КОНЦОВКА ---
     [Header("Концовка")]
     public float endingDelay = 3.0f;
     public float endingFadeDuration = 2.0f;
@@ -102,18 +104,18 @@ public class GameManager : MonoBehaviour
 
 
     // =========================================================
-    // ОСНОВНЫЕ МЕТОДЫ
+    // СТАРТ И ИНИЦИАЛИЗАЦИЯ
     // =========================================================
 
     void Start()
     {
-        // Подписка на событие награды за рекламу (через YandexManager)
+        // Подписка на награду за рекламу
         if (YandexManager.Instance != null)
         {
             YandexManager.Instance.OnRewardGranted += SuperFeedCat;
         }
 
-        // Инициализация значений
+        // Инициализация
         currentLevelIndex = 0;
         scorePerClick = 1;
         scorePerSecond = 0;
@@ -123,7 +125,7 @@ public class GameManager : MonoBehaviour
         if (shopContentParent != null)
             shopContentRectTransform = shopContentParent.GetComponent<RectTransform>();
 
-        // Скрываем все лишние панели при старте
+        // Скрываем панели
         if (endingPanel) endingPanel.SetActive(false);
         if (postVideoUI) postVideoUI.SetActive(false);
         if (introPanel) introPanel.SetActive(false);
@@ -132,23 +134,20 @@ public class GameManager : MonoBehaviour
 
         CreateShop();
         UpdateAllShopButtonsState();
+        ApplyLevelUp(false); // Без звука при старте
 
-        // Применяем уровень без эффектов (чтобы не шуметь при старте)
-        ApplyLevelUp(false);
-
-        // --- АДАПТАЦИЯ ПОД БРАУЗЕР ---
+        // Адаптация под WebGL (Яндекс)
         if (Application.platform == RuntimePlatform.WebGLPlayer)
         {
-            if (exitButton) exitButton.SetActive(false); // Прячем выход
+            if (exitButton) exitButton.SetActive(false);
             if (restartButton)
             {
-                // Центрируем рестарт
                 RectTransform rt = restartButton.GetComponent<RectTransform>();
                 if (rt) rt.anchoredPosition = new Vector2(0, rt.anchoredPosition.y);
             }
         }
 
-        // --- ЗАПУСК ЦЕПОЧКИ ЗАГРУЗКИ ---
+        // Запуск последовательности экранов
         if (enableLoadingScreen && loadingPanel)
         {
             StartCoroutine(PlayLoadingSequence());
@@ -165,85 +164,27 @@ public class GameManager : MonoBehaviour
 
     void OnDestroy()
     {
-        // Хороший тон - отписываться от событий при уничтожении
         if (YandexManager.Instance != null)
         {
             YandexManager.Instance.OnRewardGranted -= SuperFeedCat;
         }
     }
 
-    void Update()
-    {
-        // Если скрипт выключен (например, идет заставка), update не работает
-        if (!this.enabled) return;
-
-        // --- КЛИК ПРОБЕЛОМ ---
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            if (endingPanel == null || !endingPanel.activeSelf)
-            {
-                if (catImage != null)
-                {
-                    // Имитируем клик в случайную точку на коте
-                    Vector3 clickPos = catImage.transform.position;
-                    clickPos.x += Random.Range(-50f, 50f);
-                    clickPos.y += Random.Range(-50f, 50f);
-                    HandleClick(clickPos);
-                }
-            }
-        }
-
-        // --- РАСЧЕТ ДОХОДА ---
-        double finalScorePerSecond = scorePerSecond * passiveMultiplier;
-
-        if (currentSatiety > 0)
-            currentSatiety -= satietyDepletionRate * Time.deltaTime;
-        else
-            currentSatiety = 0;
-
-        double effectiveSps = finalScorePerSecond;
-
-        // Штраф за голод и включение слез
-        if (currentSatiety <= 0)
-        {
-            effectiveSps *= satietyPenaltyMultiplier;
-            if (tearEffectObject != null && !tearEffectObject.activeSelf) tearEffectObject.SetActive(true);
-        }
-        else
-        {
-            if (tearEffectObject != null && tearEffectObject.activeSelf) tearEffectObject.SetActive(false);
-        }
-
-        if (effectiveSps > 0)
-            score += effectiveSps * Time.deltaTime;
-
-        // Обновление доступности кнопок магазина
-        for (int i = 0; i < unlockedItemsCount; i++)
-        {
-            if (i < shopButtons.Count && shopButtons[i] != null)
-                shopButtons[i].UpdateInteractableState(score);
-        }
-
-        UpdateAllUITexts();
-        UpdateProgressBar();
-    }
-
 
     // =========================================================
-    // ЛОГИКА ЗАПУСКА (Loading -> White -> Intro -> Game)
+    // ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА (Loading -> White -> Intro)
     // =========================================================
 
     private IEnumerator PlayLoadingSequence()
     {
-        this.enabled = false; // Пауза игры
+        this.enabled = false;
 
         loadingPanel.SetActive(true);
-        SetupCanvasGroup(loadingPanel); // Включаем блокировку кликов
+        SetupCanvasGroup(loadingPanel);
 
         if (mainGamePanel) mainGamePanel.SetActive(false);
         if (loadingCatVideoPlayer) loadingCatVideoPlayer.Play();
 
-        // Анимация прогресс-бара
         float timer = 0f;
         while (timer < loadingDuration)
         {
@@ -253,11 +194,8 @@ public class GameManager : MonoBehaviour
             yield return null;
         }
 
-        // --- СООБЩАЕМ ЯНДЕКСУ О ГОТОВНОСТИ ---
-        if (YandexManager.Instance != null)
-        {
-            YandexManager.Instance.ReportGameReady();
-        }
+        // Сообщаем Яндексу, что игра загружена
+        if (YandexManager.Instance != null) YandexManager.Instance.ReportGameReady();
 
         yield return new WaitForSeconds(0.2f);
 
@@ -267,7 +205,6 @@ public class GameManager : MonoBehaviour
             whiteFadePanel.SetActive(true);
             CanvasGroup w = SetupCanvasGroup(whiteFadePanel);
             w.alpha = 0;
-
             float t = 0;
             while (t < whiteFadeInDuration)
             {
@@ -281,7 +218,6 @@ public class GameManager : MonoBehaviour
         if (loadingCatVideoPlayer) loadingCatVideoPlayer.Stop();
         loadingPanel.SetActive(false);
 
-        // Переход дальше
         if (enableIntro && introPanel)
             StartCoroutine(StartIntroSequence(true));
         else
@@ -294,7 +230,6 @@ public class GameManager : MonoBehaviour
     private IEnumerator StartIntroSequence(bool startedFromWhite)
     {
         this.enabled = false;
-
         introPanel.SetActive(true);
         SetupCanvasGroup(introPanel);
 
@@ -309,29 +244,40 @@ public class GameManager : MonoBehaviour
             introVideoPlayer.Play();
         }
 
-        // Убираем белую вспышку (если была)
         if (startedFromWhite && whiteFadePanel) StartCoroutine(FadeOutWhite());
 
-        // Ждем видео
+        // Ждем пока видео играет
         if (introVideoPlayer)
         {
             while (introVideoPlayer.isPlaying) yield return null;
         }
 
-        // Включаем игру на фоне
+        // --- ПЛАВНЫЙ ПЕРЕХОД В ИГРУ ---
         if (mainGamePanel) mainGamePanel.SetActive(true);
 
-        // Плавное исчезновение интро + Эффект появления
+        // Получаем аудио компонент видеоплеера для затухания звука
+        AudioSource videoAudio = (introVideoPlayer != null) ? introVideoPlayer.GetComponent<AudioSource>() : null;
+        float startVolume = (videoAudio != null) ? videoAudio.volume : 1f;
+
         CanvasGroup introCg = introPanel.GetComponent<CanvasGroup>();
-        float t = 0;
+        float t = 0f;
         bool playedEffect = false;
 
         while (t < introFadeDuration)
         {
             t += Time.deltaTime;
-            introCg.alpha = Mathf.Lerp(1, 0, t / introFadeDuration);
+            float progress = t / introFadeDuration;
 
-            // Запускаем частицы на 20% прозрачности
+            // 1. Затухание картинки
+            introCg.alpha = Mathf.Lerp(1, 0, progress);
+
+            // 2. Затухание звука видео
+            if (videoAudio != null)
+            {
+                videoAudio.volume = Mathf.Lerp(startVolume, 0f, progress);
+            }
+
+            // 3. Эффект появления кота
             if (!playedEffect && t > introFadeDuration * 0.2f)
             {
                 if (levelUpEffect) levelUpEffect.Play();
@@ -369,14 +315,62 @@ public class GameManager : MonoBehaviour
         this.enabled = true;
     }
 
-    // Вспомогательный метод для настройки CanvasGroup
-    private CanvasGroup SetupCanvasGroup(GameObject panel)
+    // =========================================================
+    // ОСНОВНОЙ ИГРОВОЙ ЦИКЛ (UPDATE)
+    // =========================================================
+
+    void Update()
     {
-        CanvasGroup cg = panel.GetComponent<CanvasGroup>();
-        if (cg == null) cg = panel.AddComponent<CanvasGroup>();
-        cg.alpha = 1f;
-        cg.blocksRaycasts = true;
-        return cg;
+        if (!this.enabled) return;
+
+        // Клик пробелом
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            if (endingPanel == null || !endingPanel.activeSelf)
+            {
+                if (catImage != null)
+                {
+                    Vector3 clickPos = catImage.transform.position;
+                    clickPos.x += Random.Range(-50f, 50f);
+                    clickPos.y += Random.Range(-50f, 50f);
+                    HandleClick(clickPos);
+                }
+            }
+        }
+
+        // Экономика
+        double finalScorePerSecond = scorePerSecond * passiveMultiplier;
+
+        if (currentSatiety > 0)
+            currentSatiety -= satietyDepletionRate * Time.deltaTime;
+        else
+            currentSatiety = 0;
+
+        double effectiveSps = finalScorePerSecond;
+
+        // Голод и слезы
+        if (currentSatiety <= 0)
+        {
+            effectiveSps *= satietyPenaltyMultiplier;
+            if (tearEffectObject != null && !tearEffectObject.activeSelf) tearEffectObject.SetActive(true);
+        }
+        else
+        {
+            if (tearEffectObject != null && tearEffectObject.activeSelf) tearEffectObject.SetActive(false);
+        }
+
+        if (effectiveSps > 0)
+            score += effectiveSps * Time.deltaTime;
+
+        // Магазин
+        for (int i = 0; i < unlockedItemsCount; i++)
+        {
+            if (i < shopButtons.Count && shopButtons[i] != null)
+                shopButtons[i].UpdateInteractableState(score);
+        }
+
+        UpdateAllUITexts();
+        UpdateProgressBar();
     }
 
 
@@ -393,10 +387,9 @@ public class GameManager : MonoBehaviour
     {
         score = loadedScore;
         currentLevelIndex = loadedLevel;
-
         UpdateAllUITexts();
         UpdateProgressBar();
-        ApplyLevelUp(false); // Применяем состояние уровня без звука
+        ApplyLevelUp(false);
     }
 
 
@@ -404,17 +397,12 @@ public class GameManager : MonoBehaviour
     // РЕКЛАМА И КНОПКИ
     // =========================================================
 
-    // Привяжи это к кнопке "Суперкорм"
     public void WatchAdForSuperFood()
     {
-        if (YandexManager.Instance != null)
-        {
-            YandexManager.Instance.ShowRewardAd();
-        }
+        if (YandexManager.Instance != null) YandexManager.Instance.ShowRewardAd();
     }
 
-    // Это вызывается автоматически после рекламы
-    private void SuperFeedCat()
+    public void SuperFeedCat()
     {
         currentSatiety = maxSatiety * 2.0f;
     }
@@ -434,7 +422,7 @@ public class GameManager : MonoBehaviour
 
 
     // =========================================================
-    // ИГРОВАЯ МЕХАНИКА
+    // МЕХАНИКИ ИГРЫ
     // =========================================================
 
     public void OnCatClicked(BaseEventData baseData)
@@ -496,14 +484,13 @@ public class GameManager : MonoBehaviour
         if (playEffects && levelUpEffect)
             levelUpEffect.Play();
 
-        // --- РЕКЛАМА ПРИ ПОВЫШЕНИИ УРОВНЯ ---
-        // Показываем, только если это не старт игры (playEffects == true) и есть менеджер
+        // Реклама при повышении уровня (Межстраничная)
         if (playEffects && YandexManager.Instance != null)
         {
             YandexManager.Instance.ShowInterstitialAd();
         }
-        // -------------------------------------
 
+        // Финал
         if (currentLevelIndex == levels.Count - 1)
         {
             satietyDepletionRate = 0f;
@@ -547,6 +534,8 @@ public class GameManager : MonoBehaviour
             currentSatiety = Mathf.Min(maxSatiety, currentSatiety + amount);
         }
     }
+
+    // --- МАГАЗИН И UI ---
 
     private void CreateShop()
     {
@@ -616,6 +605,7 @@ public class GameManager : MonoBehaviour
     }
 
     // --- ЛОГИКА КОНЦОВКИ ---
+
     private IEnumerator WaitAndStartEnding()
     {
         yield return new WaitForSeconds(endingDelay);
@@ -659,11 +649,23 @@ public class GameManager : MonoBehaviour
 
     void OnVideoFinished(VideoPlayer vp)
     {
-        if (postVideoUI) postVideoUI.SetActive(true);
+        // ХАК: Отматываем на 0.1 секунды назад от конца и ставим паузу
+        // Это гарантирует, что мы видим картинку, а не черный экран конца файла
+        if (vp.frameCount > 0)
+        {
+            vp.frame = (long)(vp.frameCount - 5); // Откат на 5 кадров назад
+        }
+
+        vp.Pause();
+
+        if (postVideoUI != null)
+            postVideoUI.SetActive(true);
+
         vp.loopPointReached -= OnVideoFinished;
     }
 
     // --- УТИЛИТЫ ---
+
     public float GetSatietyPercentage() { return maxSatiety == 0 ? 0 : currentSatiety / maxSatiety; }
     private void ResetCatScale() { catImage.transform.localScale = Vector3.one; }
 
@@ -675,5 +677,14 @@ public class GameManager : MonoBehaviour
         if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "Б";
         if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Т";
         return (number / 1_000_000_000_000_000).ToString("F1") + "Кв";
+    }
+
+    private CanvasGroup SetupCanvasGroup(GameObject panel)
+    {
+        CanvasGroup cg = panel.GetComponent<CanvasGroup>();
+        if (cg == null) cg = panel.AddComponent<CanvasGroup>();
+        cg.alpha = 1f;
+        cg.blocksRaycasts = true;
+        return cg;
     }
 }
