@@ -349,4 +349,20 @@ public class GameManager : MonoBehaviour
     public float GetSatietyPercentage() { return maxSatiety == 0 ? 0 : currentSatiety / maxSatiety; }
     private void ResetCatScale() { catImage.transform.localScale = Vector3.one; }
     private string FormatNumber(double number) { if (number < 1000) return number.ToString("F0"); if (number < 1_000_000) return (number / 1000).ToString("F1") + "K"; if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M"; if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B"; if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T"; return (number / 1_000_000_000_000_000).ToString("F1") + "Qa"; }
+
+    // --- ÂÑÒÀÂÈÒÜ ÏÅÐÅÄ ÏÎÑËÅÄÍÅÉ ÇÀÊÐÛÂÀÞÙÅÉ ÑÊÎÁÊÎÉ ÑÊÐÈÏÒÀ ---
+
+    public void RestartGame()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
+    public void ExitGame()
+    {
+        Debug.Log("Íàæàòà êíîïêà Âûõîä"); // Äëÿ ïðîâåðêè â êîíñîëè
+        Application.Quit();
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#endif
+    }
 }

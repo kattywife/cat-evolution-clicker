@@ -1,0 +1,16 @@
+mergeInto(LibraryManager.library, {
+
+  GameReady: function () {
+    try {
+        if (typeof ysdk !== 'undefined') {
+            ysdk.features.LoadingAPI.ready();
+            console.log('Game Ready sent');
+        } else {
+            console.log('Yandex SDK is not ready yet');
+        }
+    } catch (e) {
+        console.error('Error sending GameReady:', e);
+    }
+  },
+
+});
