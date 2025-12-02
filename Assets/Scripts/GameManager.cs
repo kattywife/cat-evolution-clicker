@@ -66,14 +66,13 @@ public class GameManager : MonoBehaviour
 
     [Header("Переход через Белое")]
     public GameObject whiteFadePanel;
-    public float whiteFadeInDuration = 1.0f;
-    public float whiteFadeOutDuration = 1.0f;
+    public float whiteFadeInDuration = 1.0f; // Время ухода в белое
+    public float whiteFadeOutDuration = 1.0f; // Время выхода из белого
 
     [Header("Интро")]
     public bool enableIntro = true;
     public GameObject introPanel;
     public VideoPlayer introVideoPlayer;
-    public float introFadeDuration = 1.5f;
 
     [Header("Концовка")]
     public float endingDelay = 3.0f;
@@ -109,10 +108,10 @@ public class GameManager : MonoBehaviour
     private double clickMultiplier = 1.0;
     private double passiveMultiplier = 1.0;
 
-    // Флаг, что мы сейчас смотрим финальное видео
+    // Флаг для отслеживания концовки
     private bool isWatchingEnding = false;
 
-    // Типы наград за рекламу
+    // Типы наград
     private enum AdRewardType { None, SuperFood, DoubleScore }
     private AdRewardType pendingAdReward = AdRewardType.None;
 
@@ -123,11 +122,13 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
+        // Подписка на награду
         if (YandexManager.Instance != null)
         {
             YandexManager.Instance.OnRewardGranted += OnAdRewarded;
         }
 
+        // Инициализация
         currentLevelIndex = 0;
         scorePerClick = 1;
         scorePerSecond = 0;
@@ -137,6 +138,7 @@ public class GameManager : MonoBehaviour
         if (shopContentParent != null)
             shopContentRectTransform = shopContentParent.GetComponent<RectTransform>();
 
+        // Скрываем все панели
         if (endingPanel) endingPanel.SetActive(false);
         if (postVideoUI) postVideoUI.SetActive(false);
         if (introPanel) introPanel.SetActive(false);
@@ -145,8 +147,9 @@ public class GameManager : MonoBehaviour
 
         CreateShop();
         UpdateAllShopButtonsState();
-        ApplyLevelUp(false);
+        ApplyLevelUp(false); // Без звука при старте
 
+        // Адаптация под WebGL
         if (Application.platform == RuntimePlatform.WebGLPlayer)
         {
             if (exitButton) exitButton.SetActive(false);
@@ -157,14 +160,207 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (enableLoadingScreen && loadingPanel) StartCoroutine(PlayLoadingSequence());
-        else if (enableIntro && introPanel) StartCoroutine(StartIntroSequence(false));
-        else StartGameImmediately();
+        // Запуск цепочки
+        if (enableLoadingScreen && loadingPanel)
+        {
+            StartCoroutine(PlayLoadingSequence());
+        }
+        else if (enableIntro && introPanel)
+        {
+            StartCoroutine(StartIntroSequence(false));
+        }
+        else
+        {
+            StartGameImmediately();
+        }
     }
 
     void OnDestroy()
     {
         if (YandexManager.Instance != null) YandexManager.Instance.OnRewardGranted -= OnAdRewarded;
+    }
+
+
+    // =========================================================
+    // ПОСЛЕДОВАТЕЛЬНОСТЬ ЗАПУСКА (Loading -> White -> Intro -> White -> Game)
+    // =========================================================
+
+    private IEnumerator PlayLoadingSequence()
+    {
+        this.enabled = false;
+
+        loadingPanel.SetActive(true);
+        SetupCanvasGroup(loadingPanel);
+
+        if (mainGamePanel) mainGamePanel.SetActive(false);
+        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Play();
+
+        // 1. Прогресс бар
+        float timer = 0f;
+        while (timer < loadingDuration)
+        {
+            timer += Time.deltaTime;
+            if (loadingFillImage)
+                loadingFillImage.fillAmount = Mathf.Clamp01(timer / loadingDuration);
+            yield return null;
+        }
+
+        if (YandexManager.Instance != null) YandexManager.Instance.ReportGameReady();
+
+        yield return new WaitForSeconds(0.2f);
+
+        // 2. Переход в БЕЛОЕ (Заливка экрана)
+        if (whiteFadePanel)
+        {
+            whiteFadePanel.SetActive(true);
+            CanvasGroup w = SetupCanvasGroup(whiteFadePanel);
+            w.alpha = 0;
+
+            float t = 0;
+            while (t < whiteFadeInDuration)
+            {
+                t += Time.deltaTime;
+                w.alpha = Mathf.Lerp(0, 1, t / whiteFadeInDuration);
+                yield return null;
+            }
+            w.alpha = 1; // Теперь экран полностью белый
+        }
+
+        // Выключаем загрузку
+        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Stop();
+        loadingPanel.SetActive(false);
+
+        // Переходим к следующему этапу (с флагом startedFromWhite = true)
+        if (enableIntro && introPanel)
+            StartCoroutine(StartIntroSequence(true));
+        else
+        {
+            StartGameImmediately();
+            if (whiteFadePanel) StartCoroutine(FadeOutWhite());
+        }
+    }
+
+    private IEnumerator StartIntroSequence(bool startedFromWhite)
+    {
+        this.enabled = false;
+        introPanel.SetActive(true);
+        SetupCanvasGroup(introPanel);
+
+        if (mainGamePanel) mainGamePanel.SetActive(false);
+
+        // Подготовка видео
+        if (introVideoPlayer)
+        {
+            introVideoPlayer.isLooping = false;
+            introVideoPlayer.Prepare();
+            while (!introVideoPlayer.isPrepared) yield return null;
+            introVideoPlayer.Play();
+        }
+
+        // 3. Выход из БЕЛОГО (Показываем Интро)
+        if (startedFromWhite && whiteFadePanel)
+        {
+            // Здесь мы запускаем "разбеливание" параллельно с видео
+            StartCoroutine(FadeOutWhite());
+        }
+
+        // Ждем пока видео играет
+        if (introVideoPlayer)
+        {
+            while (introVideoPlayer.isPlaying) yield return null;
+        }
+
+        // --- ПЕРЕХОД К ИГРЕ (ЧЕРЕЗ БЕЛОЕ) ---
+
+        AudioSource videoAudio = (introVideoPlayer != null) ? introVideoPlayer.GetComponent<AudioSource>() : null;
+        float startVolume = (videoAudio != null) ? videoAudio.volume : 1f;
+
+        // 4. Переход в БЕЛОЕ (Скрываем Интро)
+        if (whiteFadePanel)
+        {
+            whiteFadePanel.SetActive(true);
+            CanvasGroup w = SetupCanvasGroup(whiteFadePanel);
+            w.alpha = 0;
+
+            float t = 0;
+            while (t < whiteFadeInDuration)
+            {
+                t += Time.deltaTime;
+                float progress = t / whiteFadeInDuration;
+
+                // Белеем
+                w.alpha = Mathf.Lerp(0, 1, progress);
+
+                // Заглушаем звук
+                if (videoAudio != null)
+                    videoAudio.volume = Mathf.Lerp(startVolume, 0f, progress);
+
+                yield return null;
+            }
+            w.alpha = 1;
+        }
+
+        // Теперь экран белый и тихий. Переключаем панели.
+        introPanel.SetActive(false);
+        if (mainGamePanel) mainGamePanel.SetActive(true);
+
+        // 5. Выход из БЕЛОГО (Показываем Игру)
+        if (whiteFadePanel)
+        {
+            CanvasGroup w = whiteFadePanel.GetComponent<CanvasGroup>();
+            float t = 0;
+            bool playedEffect = false;
+
+            while (t < whiteFadeOutDuration)
+            {
+                t += Time.deltaTime;
+                w.alpha = Mathf.Lerp(1, 0, t / whiteFadeOutDuration);
+
+                // Эффект появления кота (когда экран чуть просветлел)
+                if (!playedEffect && t > whiteFadeOutDuration * 0.2f)
+                {
+                    if (levelUpEffect) levelUpEffect.Play();
+                    playedEffect = true;
+                }
+                yield return null;
+            }
+            whiteFadePanel.SetActive(false);
+            if (!playedEffect && levelUpEffect) levelUpEffect.Play();
+        }
+
+        this.enabled = true; // СТАРТ ИГРЫ
+    }
+
+    private IEnumerator FadeOutWhite()
+    {
+        if (whiteFadePanel)
+        {
+            CanvasGroup c = whiteFadePanel.GetComponent<CanvasGroup>();
+            float t = 0;
+            while (t < whiteFadeOutDuration)
+            {
+                t += Time.deltaTime;
+                c.alpha = Mathf.Lerp(1, 0, t / whiteFadeOutDuration);
+                yield return null;
+            }
+            whiteFadePanel.SetActive(false);
+        }
+    }
+
+    private void StartGameImmediately()
+    {
+        if (mainGamePanel) mainGamePanel.SetActive(true);
+        if (levelUpEffect) levelUpEffect.Play();
+        this.enabled = true;
+    }
+
+    private CanvasGroup SetupCanvasGroup(GameObject panel)
+    {
+        CanvasGroup cg = panel.GetComponent<CanvasGroup>();
+        if (cg == null) cg = panel.AddComponent<CanvasGroup>();
+        cg.alpha = 1f;
+        cg.blocksRaycasts = true;
+        return cg;
     }
 
 
@@ -176,19 +372,16 @@ public class GameManager : MonoBehaviour
     {
         if (!this.enabled) return;
 
-        // --- НОВОЕ: ЛОВИМ КОНЕЦ ВИДЕО БЕЗ ДЕРГАНЬЯ ---
+        // Слежение за концовкой (пауза в конце)
         if (isWatchingEnding && endingVideoPlayer != null && endingVideoPlayer.isPlaying)
         {
-            // Если до конца осталось меньше 0.1 секунды (3-4 кадра)
             if (endingVideoPlayer.length > 0 && endingVideoPlayer.time >= endingVideoPlayer.length - 0.1f)
             {
-                endingVideoPlayer.Pause(); // Просто ставим на паузу, кадр остается
-                isWatchingEnding = false;  // Перестаем следить
-
-                if (postVideoUI) postVideoUI.SetActive(true); // Включаем кнопки
+                endingVideoPlayer.Pause();
+                isWatchingEnding = false;
+                if (postVideoUI) postVideoUI.SetActive(true);
             }
         }
-        // ---------------------------------------------
 
         // Таймер кнопки х2
         if (currentDoubleScoreTimer > 0)
@@ -218,7 +411,7 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // Экономика и голод
+        // Экономика
         double finalScorePerSecond = scorePerSecond * passiveMultiplier;
 
         if (currentSatiety > 0)
@@ -240,6 +433,7 @@ public class GameManager : MonoBehaviour
         if (effectiveSps > 0)
             score += effectiveSps * Time.deltaTime;
 
+        // Магазин
         for (int i = 0; i < unlockedItemsCount; i++)
         {
             if (i < shopButtons.Count && shopButtons[i] != null)
@@ -272,10 +466,7 @@ public class GameManager : MonoBehaviour
             if (endingVideoPlayer)
             {
                 endingVideoPlayer.isLooping = false;
-                // Мы больше не подписываемся на loopPointReached, ловим в Update
                 endingVideoPlayer.Play();
-
-                // Включаем слежение в Update
                 isWatchingEnding = true;
             }
             if (endingMusic) AudioManager.Instance.PlayMusic(endingMusic);
@@ -296,143 +487,50 @@ public class GameManager : MonoBehaviour
         }
         cg.alpha = 1f;
         if (mainGamePanel) mainGamePanel.SetActive(false);
-        // НЕ выключаем this.enabled, чтобы Update продолжал работать и следить за видео!
+    }
+
+    // Этот метод теперь используется только как страховка, основная логика в Update
+    void OnVideoFinished(VideoPlayer vp)
+    {
+        vp.Pause();
+        if (postVideoUI) postVideoUI.SetActive(true);
     }
 
 
     // =========================================================
-    // ЗАПУСК ИГРЫ (Остальное без изменений)
+    // ОСТАЛЬНОЕ (Покупки, Сейвы, Кнопки...)
     // =========================================================
 
-    private IEnumerator PlayLoadingSequence()
+    public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
-        this.enabled = false;
-        loadingPanel.SetActive(true);
-        SetupCanvasGroup(loadingPanel);
-
-        if (mainGamePanel) mainGamePanel.SetActive(false);
-        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Play();
-
-        float timer = 0f;
-        while (timer < loadingDuration)
+        if (score >= cost)
         {
-            timer += Time.deltaTime;
-            if (loadingFillImage)
-                loadingFillImage.fillAmount = Mathf.Clamp01(timer / loadingDuration);
-            yield return null;
-        }
-
-        if (YandexManager.Instance != null) YandexManager.Instance.ReportGameReady();
-
-        yield return new WaitForSeconds(0.2f);
-
-        if (whiteFadePanel)
-        {
-            whiteFadePanel.SetActive(true);
-            CanvasGroup w = SetupCanvasGroup(whiteFadePanel);
-            w.alpha = 0;
-            float t = 0;
-            while (t < whiteFadeInDuration)
+            score -= cost;
+            switch (upgrade.type)
             {
-                t += Time.deltaTime;
-                w.alpha = Mathf.Lerp(0, 1, t / whiteFadeInDuration);
-                yield return null;
+                case UpgradeType.PerClick:
+                    if (clickMultiplier > 0) scorePerClick += upgrade.power / clickMultiplier;
+                    else scorePerClick += upgrade.power;
+                    break;
+                case UpgradeType.PerSecond:
+                    if (passiveMultiplier > 0) scorePerSecond += upgrade.power / passiveMultiplier;
+                    else scorePerSecond += upgrade.power;
+                    break;
+                case UpgradeType.ClickMultiplier: clickMultiplier *= upgrade.power; break;
+                case UpgradeType.PassiveMultiplier: passiveMultiplier *= upgrade.power; break;
+                case UpgradeType.GlobalMultiplier: clickMultiplier *= upgrade.power; passiveMultiplier *= upgrade.power; break;
             }
-            w.alpha = 1;
-        }
-
-        if (loadingCatVideoPlayer) loadingCatVideoPlayer.Stop();
-        loadingPanel.SetActive(false);
-
-        if (enableIntro && introPanel)
-            StartCoroutine(StartIntroSequence(true));
-        else
-        {
-            StartGameImmediately();
-            if (whiteFadePanel) StartCoroutine(FadeOutWhite());
-        }
-    }
-
-    private IEnumerator StartIntroSequence(bool startedFromWhite)
-    {
-        this.enabled = false;
-        introPanel.SetActive(true);
-        SetupCanvasGroup(introPanel);
-
-        if (mainGamePanel) mainGamePanel.SetActive(false);
-
-        if (introVideoPlayer)
-        {
-            introVideoPlayer.isLooping = false;
-            introVideoPlayer.Prepare();
-            while (!introVideoPlayer.isPrepared) yield return null;
-            introVideoPlayer.Play();
-        }
-
-        if (startedFromWhite && whiteFadePanel) StartCoroutine(FadeOutWhite());
-
-        if (introVideoPlayer)
-        {
-            while (introVideoPlayer.isPlaying) yield return null;
-        }
-
-        if (mainGamePanel) mainGamePanel.SetActive(true);
-
-        AudioSource videoAudio = (introVideoPlayer != null) ? introVideoPlayer.GetComponent<AudioSource>() : null;
-        float startVolume = (videoAudio != null) ? videoAudio.volume : 1f;
-
-        CanvasGroup introCg = introPanel.GetComponent<CanvasGroup>();
-        float t = 0f;
-        bool playedEffect = false;
-
-        while (t < introFadeDuration)
-        {
-            t += Time.deltaTime;
-            float progress = t / introFadeDuration;
-
-            introCg.alpha = Mathf.Lerp(1, 0, progress);
-            if (videoAudio != null) videoAudio.volume = Mathf.Lerp(startVolume, 0f, progress);
-
-            if (!playedEffect && t > introFadeDuration * 0.2f)
+            int purchasedIndex = shopButtons.IndexOf(button);
+            if (purchasedIndex == unlockedItemsCount - 1 && unlockedItemsCount < shopButtons.Count)
             {
-                if (levelUpEffect) levelUpEffect.Play();
-                playedEffect = true;
+                unlockedItemsCount++;
+                if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating)
+                    StartCoroutine(AnimateScrollToShowItem(shopButtons[unlockedItemsCount - 1].GetComponent<RectTransform>()));
             }
-            yield return null;
-        }
-
-        introPanel.SetActive(false);
-        if (!playedEffect && levelUpEffect) levelUpEffect.Play();
-
-        this.enabled = true;
-    }
-
-    private IEnumerator FadeOutWhite()
-    {
-        if (whiteFadePanel)
-        {
-            CanvasGroup c = whiteFadePanel.GetComponent<CanvasGroup>();
-            float t = 0;
-            while (t < whiteFadeOutDuration)
-            {
-                t += Time.deltaTime;
-                c.alpha = Mathf.Lerp(1, 0, t / whiteFadeOutDuration);
-                yield return null;
-            }
-            whiteFadePanel.SetActive(false);
+            button.OnPurchaseSuccess();
+            UpdateAllShopButtonsState();
         }
     }
-
-    private void StartGameImmediately()
-    {
-        if (mainGamePanel) mainGamePanel.SetActive(true);
-        if (levelUpEffect) levelUpEffect.Play();
-        this.enabled = true;
-    }
-
-    // =========================================================
-    // ОСТАЛЬНЫЕ МЕТОДЫ (Покупки, Сейвы, Кнопки...)
-    // =========================================================
 
     public int GetCurrentLevel() { return currentLevelIndex; }
     public void LoadGameState(double loadedScore, int loadedLevel) { score = loadedScore; currentLevelIndex = loadedLevel; UpdateAllUITexts(); UpdateProgressBar(); ApplyLevelUp(false); }
@@ -463,16 +561,13 @@ public class GameManager : MonoBehaviour
         if (currentLevelIndex == levels.Count - 1) { satietyDepletionRate = 0f; currentSatiety = maxSatiety; if (tearEffectObject) tearEffectObject.SetActive(false); if (playEffects) StartCoroutine(WaitAndStartEnding()); }
     }
 
-    public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button) { if (score >= cost) { score -= cost; switch (upgrade.type) { case UpgradeType.PerClick: if (clickMultiplier > 0) scorePerClick += upgrade.power / clickMultiplier; else scorePerClick += upgrade.power; break; case UpgradeType.PerSecond: if (passiveMultiplier > 0) scorePerSecond += upgrade.power / passiveMultiplier; else scorePerSecond += upgrade.power; break; case UpgradeType.ClickMultiplier: clickMultiplier *= upgrade.power; break; case UpgradeType.PassiveMultiplier: passiveMultiplier *= upgrade.power; break; case UpgradeType.GlobalMultiplier: clickMultiplier *= upgrade.power; passiveMultiplier *= upgrade.power; break; } int purchasedIndex = shopButtons.IndexOf(button); if (purchasedIndex == unlockedItemsCount - 1 && unlockedItemsCount < shopButtons.Count) { unlockedItemsCount++; if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating) StartCoroutine(AnimateScrollToShowItem(shopButtons[unlockedItemsCount - 1].GetComponent<RectTransform>())); } button.OnPurchaseSuccess(); UpdateAllShopButtonsState(); } }
     public void FeedCat(double cost, float amount) { if (score >= cost) { score -= cost; currentSatiety = Mathf.Min(maxSatiety, currentSatiety + amount); } }
     private void CreateShop() { foreach (var upgrade in upgrades) { GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopContentParent); UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>(); buttonUI.Setup(upgrade, this); shopButtons.Add(buttonUI); } }
     private void UpdateAllShopButtonsState() { for (int i = 0; i < shopButtons.Count; i++) { if (shopButtons[i] == null) continue; bool isUnlocked = (i < unlockedItemsCount); shopButtons[i].SetLockedState(!isUnlocked); if (isUnlocked) shopButtons[i].UpdateInteractableState(score); } }
     private void UpdateAllUITexts() { if (totalScoreText) totalScoreText.text = FormatNumber(score); if (perSecondText) perSecondText.text = $"{FormatNumber(scorePerSecond * passiveMultiplier)}/сек"; }
     private void UpdateProgressBar() { if (!levelProgressBar) return; if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1) { levelProgressBar.value = 1; if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}"; if (progressText) progressText.text = "МАКС."; return; } double barEndValue = levels[currentLevelIndex + 1].scoreToReach; levelProgressBar.minValue = 0f; levelProgressBar.maxValue = (float)barEndValue; levelProgressBar.value = (float)score; if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}"; if (progressText) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}"; }
     private IEnumerator AnimateScrollToShowItem(RectTransform targetItem) { isShopAnimating = true; shopScrollRect.enabled = false; Canvas.ForceUpdateCanvases(); Vector2 startPos = shopContentRectTransform.anchoredPosition; Vector2 targetPos = new Vector2(startPos.x, -targetItem.anchoredPosition.y); Vector2 overshoot = targetPos + new Vector2(0, animationBounceAmount); float t = 0; while (t < 1f) { t += Time.deltaTime * animationScrollSpeed; shopContentRectTransform.anchoredPosition = Vector2.Lerp(startPos, overshoot, t); yield return null; } t = 0; while (t < 1f) { t += Time.deltaTime * animationScrollSpeed * 1.5f; shopContentRectTransform.anchoredPosition = Vector2.Lerp(overshoot, targetPos, t); yield return null; } shopContentRectTransform.anchoredPosition = targetPos; isShopAnimating = false; shopScrollRect.enabled = true; }
-
     public float GetSatietyPercentage() { return maxSatiety == 0 ? 0 : currentSatiety / maxSatiety; }
     private void ResetCatScale() { catImage.transform.localScale = Vector3.one; }
-    private string FormatNumber(double number) { if (number < 1000) return number.ToString("F0"); if (number < 1_000_000) return (number / 1000).ToString("F1") + "K"; if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M"; if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B"; if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Т"; return (number / 1_000_000_000_000_000).ToString("F1") + "Кв"; }
-    private CanvasGroup SetupCanvasGroup(GameObject panel) { CanvasGroup cg = panel.GetComponent<CanvasGroup>(); if (cg == null) cg = panel.AddComponent<CanvasGroup>(); cg.alpha = 1f; cg.blocksRaycasts = true; return cg; }
+    private string FormatNumber(double number) { if (number < 1000) return number.ToString("F0"); if (number < 1_000_000) return (number / 1000).ToString("F1") + "K"; if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M"; if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B"; if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "T"; return (number / 1_000_000_000_000_000).ToString("F1") + "Кв"; }
 }
