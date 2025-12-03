@@ -13,12 +13,13 @@ public class TutorialManager : MonoBehaviour
     public TutorialTooltip tooltipFeedCat;     // 4. Покорми котика
 
     [Header("Настройки")]
+    public float step1Delay = 4.0f;    // <--- НОВОЕ: Задержка появления первого совета
     public float step2Duration = 7.0f; // Сколько висит совет про монетки
 
-    // Флаги состояния (чтобы не показывать повторно)
+    // Флаги состояния
     private bool step1Done = false;
     private bool step2Done = false;
-    private bool step3Shown = false; // Показали, но еще не купили
+    private bool step3Shown = false;
     private bool step3Done = false;
     private bool step4Shown = false;
     private bool step4Done = false;
@@ -31,30 +32,51 @@ public class TutorialManager : MonoBehaviour
     private IEnumerator Start()
     {
         // Ждем инициализации GameManager
-        yield return new WaitForSeconds(1.0f);
+        yield return new WaitForSeconds(0.5f);
 
-        // Если это новая игра (счет 0 и уровень 0), начинаем туториал
+        if (gameManager == null)
+        {
+            Debug.LogError("TutorialManager: Не привязан GameManager!");
+            yield break;
+        }
+
+        // Если новая игра
         if (gameManager.score == 0 && gameManager.GetCurrentLevel() == 0)
         {
-            ShowStep1_ClickCat();
+            // Вместо мгновенного показа запускаем таймер
+            StartCoroutine(Step1DelayRoutine());
         }
         else
         {
-            // Если игрок вернулся (загрузка), считаем первые шаги пройденными
+            // Если загрузка - пропускаем начало
             step1Done = true;
             step2Done = true;
-            step3Done = true; // Магазин скорее всего уже понятен
+            step3Done = true;
+        }
+    }
+
+    // <--- НОВАЯ ЛОГИКА: Таймер первого шага
+    private IEnumerator Step1DelayRoutine()
+    {
+        // Ждем 4 секунды (или сколько настроишь)
+        yield return new WaitForSeconds(step1Delay);
+
+        // ВАЖНО: Если игрок за эти 4 секунды еще НЕ начал кликать сам,
+        // тогда показываем совет. Если уже начал - не мешаем.
+        if (!step1Done)
+        {
+            ShowStep1_ClickCat();
         }
     }
 
     private void Update()
     {
+        if (gameManager == null) return;
+
         // ЛОГИКА ШАГА 3 (Магазин)
-        // Если шаг 2 пройден, шаг 3 еще не пройден, и мы его еще не показываем
         if (step2Done && !step3Done && !step3Shown)
         {
-            // Проверяем, хватает ли денег на ПЕРВЫЙ товар
-            if (gameManager.upgrades.Count > 0)
+            if (gameManager.upgrades != null && gameManager.upgrades.Count > 0)
             {
                 double cost = gameManager.upgrades[0].baseCost;
                 if (gameManager.score >= cost)
@@ -65,11 +87,10 @@ public class TutorialManager : MonoBehaviour
         }
 
         // ЛОГИКА ШАГА 4 (Голод)
-        // Если шаг 2 пройден, шаг 4 не пройден и не показан
         if (step2Done && !step4Done && !step4Shown)
         {
-            // Если сытость упала ниже 70%
-            if (gameManager.GetSatietyPercentage() < 0.7f)
+            // <--- ИЗМЕНЕНИЕ: Теперь строго, когда упало до 0 (или ниже)
+            if (gameManager.currentSatiety <= 0f)
             {
                 ShowStep4_FeedCat();
             }
@@ -84,18 +105,19 @@ public class TutorialManager : MonoBehaviour
 
     public void OnCatClicked()
     {
-        // Если мы на 1 этапе
         if (!step1Done)
         {
             step1Done = true;
+
+            // Скрываем совет (если он успел появиться)
             if (tooltipClickCat) tooltipClickCat.Hide();
 
-            // Сразу запускаем шаг 2
+            // Сразу переходим к шагу 2
             ShowStep2_EarnMoney();
         }
     }
 
-    // --- ШАГ 2: МОНЕТКИ (Таймер) ---
+    // --- ШАГ 2: МОНЕТКИ ---
     public void ShowStep2_EarnMoney()
     {
         if (tooltipEarnMoney)
@@ -105,7 +127,7 @@ public class TutorialManager : MonoBehaviour
         }
         else
         {
-            step2Done = true; // Если облачка нет, сразу считаем пройденным
+            step2Done = true;
         }
     }
 
@@ -125,7 +147,6 @@ public class TutorialManager : MonoBehaviour
 
     public void OnUpgradePurchased()
     {
-        // Если подсказка висит - убираем
         if (step3Shown && !step3Done)
         {
             if (tooltipBuyUpgrade) tooltipBuyUpgrade.Hide();
