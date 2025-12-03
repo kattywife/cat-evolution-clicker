@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
-    #region --- НАСТРОЙКИ И ДАННЫЕ ---
+    #region --- НАСТРОЙКИ И ДАННЫЕ (SETTINGS & DATA) ---
 
     [Header("Данные игры")]
     public List<LevelData> levels;
@@ -22,7 +22,7 @@ public class GameManager : MonoBehaviour
 
     #endregion
 
-    #region --- ГЕЙМПЛЕЙ ---
+    #region --- ГЕЙМПЛЕЙ (GAMEPLAY) ---
 
     [Header("Состояние Экономики")]
     public double score = 0;
@@ -35,18 +35,20 @@ public class GameManager : MonoBehaviour
     public float satietyDepletionRate = 0.5f;
     public float satietyPenaltyMultiplier = 0.1f;
 
+    // Множители и прогресс
     private double clickMultiplier = 1.0;
     private double passiveMultiplier = 1.0;
     private int currentLevelIndex = 0;
 
-    // Переменная для хранения размера кота, который ты настроила в редакторе
+    // Переменная для хранения начального размера кота (чтобы не сбрасывался в 1.0)
     private Vector3 initialCatScale;
 
+    // Флаг просмотра интро (public, чтобы SaveManager мог его сохранять)
     [HideInInspector] public bool hasWatchedIntro = false;
 
     #endregion
 
-    #region --- UI ЭЛЕМЕНТЫ ---
+    #region --- UI ЭЛЕМЕНТЫ (UI REFERENCES) ---
 
     [Header("UI Ссылки")]
     public TextMeshProUGUI totalScoreText;
@@ -65,23 +67,29 @@ public class GameManager : MonoBehaviour
     [Header("Бонус за рекламу (х2)")]
     public Button doubleScoreButton;
     public TextMeshProUGUI doubleScoreButtonText;
-    public float doubleScoreCooldown = 180f;
+    public float doubleScoreCooldown = 180f; // 3 минуты
     private float currentDoubleScoreTimer = 0f;
 
     #endregion
 
-    #region --- ВИДЕО И ЭКРАНЫ ---
+    #region --- ВИДЕО И ЭКРАНЫ (VIDEO & SCREENS) ---
 
-    [Header("Имена файлов")]
+    [Header("Имена файлов (StreamingAssets)")]
     public string loadingVideoName = "loading.mp4";
     public string introVideoName = "intro.mp4";
     public string endingVideoName = "ending.mp4";
 
     [Header("Экран Загрузки - Объекты")]
     public bool enableLoadingScreen = true;
-    public GameObject loadingPanel;
+    public GameObject loadingPanel;             // Вся панель целиком
+
+    [Tooltip("Родительский объект слайдера (с фоном и заливкой)")]
     public GameObject loadingProgressBarObject;
+
+    [Tooltip("Картинка Fill внутри слайдера")]
     public Image loadingFillImage;
+
+    [Tooltip("Кнопка Старт")]
     public GameObject loadingStartButton;
 
     public VideoPlayer loadingCatVideoPlayer;
@@ -112,7 +120,7 @@ public class GameManager : MonoBehaviour
 
     #endregion
 
-    #region --- ЭФФЕКТЫ И МАГАЗИН ---
+    #region --- ЭФФЕКТЫ И МАГАЗИН (EFFECTS & SHOP) ---
 
     [Header("Эффекты")]
     public ParticleSystem levelUpEffect;
@@ -134,20 +142,22 @@ public class GameManager : MonoBehaviour
 
     #endregion
 
+    // Типы наград за рекламу
     private enum AdRewardType { None, SuperFood, DoubleScore }
     private AdRewardType pendingAdReward = AdRewardType.None;
 
 
-    #region --- СТАРТ И ИНИЦИАЛИЗАЦИЯ ---
+    #region --- СТАРТ И ИНИЦИАЛИЗАЦИЯ (START & INIT) ---
 
     void Start()
     {
+        // Подписка на события Яндекса
         if (YandexManager.Instance != null)
         {
             YandexManager.Instance.OnRewardGranted += OnAdRewarded;
         }
 
-        // ЗАПОМИНАЕМ НАЧАЛЬНЫЙ РАЗМЕР КОТА
+        // Запоминаем размер кота из редактора
         if (catImage != null)
         {
             initialCatScale = catImage.transform.localScale;
@@ -157,6 +167,7 @@ public class GameManager : MonoBehaviour
             initialCatScale = Vector3.one;
         }
 
+        // Инициализация переменных
         currentLevelIndex = 0;
         scorePerClick = 1;
         scorePerSecond = 0;
@@ -165,12 +176,14 @@ public class GameManager : MonoBehaviour
         hasWatchedIntro = false;
         isStartButtonClicked = false;
 
+        // Настройка UI загрузки
         if (loadingStartButton) loadingStartButton.SetActive(false);
         if (loadingProgressBarObject) loadingProgressBarObject.SetActive(true);
 
         if (shopContentParent != null)
             shopContentRectTransform = shopContentParent.GetComponent<RectTransform>();
 
+        // Скрытие лишних панелей
         if (endingPanel) endingPanel.SetActive(false);
         if (postVideoUI) postVideoUI.SetActive(false);
         if (introPanel) introPanel.SetActive(false);
@@ -179,8 +192,9 @@ public class GameManager : MonoBehaviour
 
         CreateShop();
         UpdateAllShopButtonsState();
-        ApplyLevelUp(false);
+        ApplyLevelUp(false); // Установка первого спрайта
 
+        // Скрытие кнопок Выход/Рестарт в WebGL
         if (Application.platform == RuntimePlatform.WebGLPlayer)
         {
             if (exitButton) exitButton.SetActive(false);
@@ -191,6 +205,7 @@ public class GameManager : MonoBehaviour
             }
         }
 
+        // Выбор режима запуска
         if (enableLoadingScreen && loadingPanel)
             StartCoroutine(PlayLoadingSequence());
         else if (enableIntro && introPanel)
@@ -208,12 +223,13 @@ public class GameManager : MonoBehaviour
     #endregion
 
 
-    #region --- ЛОГИКА ЗАГРУЗКИ ---
+    #region --- ЛОГИКА ЗАГРУЗКИ (LOADING LOGIC) ---
 
+    // Вызывается кнопкой "Старт"
     public void OnLoadingStartClicked()
     {
         isStartButtonClicked = true;
-        AudioManager.Instance.PlaySound(catClickSound);
+        AudioManager.Instance.PlaySound(catClickSound); // Разблокировка аудиоконтекста
     }
 
     private IEnumerator PlayLoadingSequence()
@@ -222,18 +238,21 @@ public class GameManager : MonoBehaviour
         loadingPanel.SetActive(true);
         SetupCanvasGroup(loadingPanel);
 
+        // Сброс UI загрузки
         if (loadingStartButton) loadingStartButton.SetActive(false);
         if (loadingProgressBarObject) loadingProgressBarObject.SetActive(true);
 
         isStartButtonClicked = false;
         if (mainGamePanel) mainGamePanel.SetActive(false);
 
+        // Запуск видео на загрузке
         if (loadingCatVideoPlayer)
         {
             yield return StartCoroutine(PrepareVideoSafe(loadingCatVideoPlayer, loadingVideoName));
             if (loadingCatVideoPlayer.isPrepared) loadingCatVideoPlayer.Play();
         }
 
+        // 1. Заполнение полоски
         float timer = 0f;
         while (timer < loadingDuration)
         {
@@ -243,21 +262,26 @@ public class GameManager : MonoBehaviour
             yield return null;
         }
 
+        // 2. Смена Полоски на Кнопку
         if (loadingProgressBarObject) loadingProgressBarObject.SetActive(false);
         if (loadingStartButton) loadingStartButton.SetActive(true);
 
+        // Сообщаем Яндексу, что игра готова (GameReady)
         if (YandexManager.Instance != null) YandexManager.Instance.ReportGameReady();
 
+        // 3. Ждем клика игрока
         yield return new WaitUntil(() => isStartButtonClicked);
 
         if (loadingStartButton) loadingStartButton.SetActive(false);
 
         yield return new WaitForSeconds(0.1f);
 
+        // 4. Решаем, показывать интро или нет
         bool shouldShowIntro = (enableIntro && introPanel && !hasWatchedIntro);
 
         if (shouldShowIntro)
         {
+            // Переход в белое перед интро
             if (whiteFadePanel)
             {
                 whiteFadePanel.SetActive(true);
@@ -304,15 +328,18 @@ public class GameManager : MonoBehaviour
 
         if (startedFromWhite && whiteFadePanel) StartCoroutine(FadeOutWhite());
 
+        // Ждем окончания видео
         if (introVideoPlayer && introVideoPlayer.isPrepared)
         {
             while (!introVideoPlayer.isPlaying) yield return null;
             while (introVideoPlayer.isPlaying) yield return null;
         }
 
+        // Сохраняем факт просмотра интро
         hasWatchedIntro = true;
         if (SaveManager.Instance != null) SaveManager.Instance.Save();
 
+        // Уход в белое
         AudioSource videoAudio = (introVideoPlayer != null) ? introVideoPlayer.GetComponent<AudioSource>() : null;
         float startVolume = (videoAudio != null) ? videoAudio.volume : 1f;
 
@@ -391,11 +418,13 @@ public class GameManager : MonoBehaviour
     #endregion
 
 
-    #region --- UPDATE И ИГРОВОЙ ЦИКЛ ---
+    #region --- UPDATE И ИГРОВОЙ ЦИКЛ (GAME LOOP) ---
 
     void Update()
     {
         if (!this.enabled) return;
+
+        // Контроль видео концовки
         if (isWatchingEnding && endingVideoPlayer != null && endingVideoPlayer.isPlaying)
         {
             if (endingVideoPlayer.length > 0 && endingVideoPlayer.time >= endingVideoPlayer.length - 0.1f)
@@ -405,6 +434,8 @@ public class GameManager : MonoBehaviour
                 if (postVideoUI) postVideoUI.SetActive(true);
             }
         }
+
+        // Таймер бонуса х2
         if (currentDoubleScoreTimer > 0)
         {
             currentDoubleScoreTimer -= Time.deltaTime;
@@ -414,19 +445,37 @@ public class GameManager : MonoBehaviour
         {
             if (doubleScoreButton && !doubleScoreButton.gameObject.activeSelf) doubleScoreButton.gameObject.SetActive(true);
         }
+
+        // Чит-код (Пробел)
         if (Input.GetKeyDown(KeyCode.Space))
         {
             if (endingPanel == null || !endingPanel.activeSelf)
                 if (catImage != null) HandleClick(catImage.transform.position);
         }
+
+        // Экономика и Сытость
         double finalScorePerSecond = scorePerSecond * passiveMultiplier;
-        if (currentSatiety > 0) currentSatiety -= satietyDepletionRate * Time.deltaTime; else currentSatiety = 0;
+
+        if (currentSatiety > 0) currentSatiety -= satietyDepletionRate * Time.deltaTime;
+        else currentSatiety = 0;
+
         double effectiveSps = finalScorePerSecond;
-        if (currentSatiety <= 0) { effectiveSps *= satietyPenaltyMultiplier; if (tearEffectObject && !tearEffectObject.activeSelf) tearEffectObject.SetActive(true); }
-        else { if (tearEffectObject && tearEffectObject.activeSelf) tearEffectObject.SetActive(false); }
+        if (currentSatiety <= 0)
+        {
+            effectiveSps *= satietyPenaltyMultiplier;
+            if (tearEffectObject && !tearEffectObject.activeSelf) tearEffectObject.SetActive(true);
+        }
+        else
+        {
+            if (tearEffectObject && tearEffectObject.activeSelf) tearEffectObject.SetActive(false);
+        }
+
         if (effectiveSps > 0) score += effectiveSps * Time.deltaTime;
+
+        // Обновление состояния кнопок
         for (int i = 0; i < unlockedItemsCount; i++)
             if (i < shopButtons.Count && shopButtons[i] != null) shopButtons[i].UpdateInteractableState(score);
+
         UpdateAllUITexts();
         UpdateProgressBar();
     }
@@ -445,17 +494,18 @@ public class GameManager : MonoBehaviour
         double finalScorePerClick = scorePerClick * clickMultiplier;
         score += finalScorePerClick;
 
+        // --- HOOK: TUTORIAL ---
         if (TutorialManager.Instance) TutorialManager.Instance.OnCatClicked();
 
         CheckForLevelUp();
 
-        // --- АНИМАЦИЯ КЛИКА (ИСПРАВЛЕНАЯ) ---
-        // Берем сохраненный размер и увеличиваем его на 10%
+        // --- АНИМАЦИЯ КОТИКА (Исправленная) ---
+        // Используем initialCatScale, чтобы не сбивать настроенный размер
         catImage.transform.localScale = initialCatScale * 1.1f;
         CancelInvoke("ResetCatScale");
         Invoke("ResetCatScale", 0.1f);
-        // ------------------------------------
 
+        // Всплывающий текст
         if (clickTextPrefab != null && canvasTransform != null)
         {
             GameObject textGO = Instantiate(clickTextPrefab, canvasTransform);
@@ -468,64 +518,196 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    // --- СБРОС РАЗМЕРА (ИСПРАВЛЕННЫЙ) ---
     private void ResetCatScale()
     {
-        // Возвращаем не 1.0, а тот размер, который ты настроила
         catImage.transform.localScale = initialCatScale;
     }
-    // ------------------------------------
 
     #endregion
 
 
-    #region --- МАГАЗИН, УРОВНИ, РЕКЛАМА (Остальное без изменений) ---
+    #region --- МАГАЗИН И ПРОКАЧКА (SHOP) ---
 
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
     {
         if (score >= cost)
         {
             score -= cost;
-            switch (upgrade.type) { case UpgradeType.PerClick: if (clickMultiplier > 0) scorePerClick += upgrade.power / clickMultiplier; else scorePerClick += upgrade.power; break; case UpgradeType.PerSecond: if (passiveMultiplier > 0) scorePerSecond += upgrade.power / passiveMultiplier; else scorePerSecond += upgrade.power; break; case UpgradeType.ClickMultiplier: clickMultiplier *= upgrade.power; break; case UpgradeType.PassiveMultiplier: passiveMultiplier *= upgrade.power; break; case UpgradeType.GlobalMultiplier: clickMultiplier *= upgrade.power; passiveMultiplier *= upgrade.power; break; }
+            switch (upgrade.type)
+            {
+                case UpgradeType.PerClick:
+                    if (clickMultiplier > 0) scorePerClick += upgrade.power / clickMultiplier;
+                    else scorePerClick += upgrade.power;
+                    break;
+                case UpgradeType.PerSecond:
+                    if (passiveMultiplier > 0) scorePerSecond += upgrade.power / passiveMultiplier;
+                    else scorePerSecond += upgrade.power;
+                    break;
+                case UpgradeType.ClickMultiplier: clickMultiplier *= upgrade.power; break;
+                case UpgradeType.PassiveMultiplier: passiveMultiplier *= upgrade.power; break;
+                case UpgradeType.GlobalMultiplier: clickMultiplier *= upgrade.power; passiveMultiplier *= upgrade.power; break;
+            }
+
             int purchasedIndex = shopButtons.IndexOf(button);
-            if (purchasedIndex == unlockedItemsCount - 1 && unlockedItemsCount < shopButtons.Count) { unlockedItemsCount++; if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating) StartCoroutine(AnimateScrollToShowItem(shopButtons[unlockedItemsCount - 1].GetComponent<RectTransform>())); }
-            button.OnPurchaseSuccess(); UpdateAllShopButtonsState();
+            if (purchasedIndex == unlockedItemsCount - 1 && unlockedItemsCount < shopButtons.Count)
+            {
+                unlockedItemsCount++;
+                if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating)
+                    StartCoroutine(AnimateScrollToShowItem(shopButtons[unlockedItemsCount - 1].GetComponent<RectTransform>()));
+            }
+
+            button.OnPurchaseSuccess();
+            UpdateAllShopButtonsState();
+
+            // --- HOOK: TUTORIAL ---
             if (TutorialManager.Instance) TutorialManager.Instance.OnUpgradePurchased();
+
+            // Сохранение
             if (SaveManager.Instance != null) SaveManager.Instance.Save();
         }
     }
 
-    public void FeedCat(double cost, float amount) { if (score >= cost) { score -= cost; currentSatiety = Mathf.Min(maxSatiety, currentSatiety + amount); if (TutorialManager.Instance) TutorialManager.Instance.OnCatFed(); } }
-    public void SuperFeedCat() { currentSatiety = maxSatiety * 2.0f; if (TutorialManager.Instance) TutorialManager.Instance.OnCatFed(); }
+    public void FeedCat(double cost, float amount)
+    {
+        if (score >= cost)
+        {
+            score -= cost;
+            currentSatiety = Mathf.Min(maxSatiety, currentSatiety + amount);
+
+            // --- HOOK: TUTORIAL ---
+            if (TutorialManager.Instance) TutorialManager.Instance.OnCatFed();
+        }
+    }
+
+    public void SuperFeedCat()
+    {
+        currentSatiety = maxSatiety * 2.0f;
+
+        // --- HOOK: TUTORIAL ---
+        if (TutorialManager.Instance) TutorialManager.Instance.OnCatFed();
+    }
 
     private void CreateShop() { foreach (var upgrade in upgrades) { GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopContentParent); UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>(); buttonUI.Setup(upgrade, this); shopButtons.Add(buttonUI); } }
     private void UpdateAllShopButtonsState() { for (int i = 0; i < shopButtons.Count; i++) { if (shopButtons[i] == null) continue; bool isUnlocked = (i < unlockedItemsCount); shopButtons[i].SetLockedState(!isUnlocked); if (isUnlocked) shopButtons[i].UpdateInteractableState(score); } }
     private IEnumerator AnimateScrollToShowItem(RectTransform targetItem) { isShopAnimating = true; shopScrollRect.enabled = false; Canvas.ForceUpdateCanvases(); Vector2 startPos = shopContentRectTransform.anchoredPosition; Vector2 targetPos = new Vector2(startPos.x, -targetItem.anchoredPosition.y); Vector2 overshoot = targetPos + new Vector2(0, animationBounceAmount); float t = 0; while (t < 1f) { t += Time.deltaTime * animationScrollSpeed; shopContentRectTransform.anchoredPosition = Vector2.Lerp(startPos, overshoot, t); yield return null; } t = 0; while (t < 1f) { t += Time.deltaTime * animationScrollSpeed * 1.5f; shopContentRectTransform.anchoredPosition = Vector2.Lerp(overshoot, targetPos, t); yield return null; } shopContentRectTransform.anchoredPosition = targetPos; isShopAnimating = false; shopScrollRect.enabled = true; }
 
-    private void CheckForLevelUp() { if (currentLevelIndex + 1 < levels.Count) { if (score >= levels[currentLevelIndex + 1].scoreToReach) { currentLevelIndex++; ApplyLevelUp(true); } } }
+    #endregion
+
+
+    #region --- УРОВНИ (LEVELS) ---
+
+    private void CheckForLevelUp()
+    {
+        if (currentLevelIndex + 1 < levels.Count)
+        {
+            if (score >= levels[currentLevelIndex + 1].scoreToReach)
+            {
+                currentLevelIndex++;
+                ApplyLevelUp(true);
+            }
+        }
+    }
+
     private void ApplyLevelUp(bool playEffects = true)
     {
         if (playEffects && levelUpSound) AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
-        if (levels.Count > 0 && currentLevelIndex < levels.Count) { catImage.sprite = levels[currentLevelIndex].catSprite; catImage.SetNativeSize(); if (tearEffectObject) tearEffectObject.transform.localPosition = levels[currentLevelIndex].tearPosition; }
+
+        if (levels.Count > 0 && currentLevelIndex < levels.Count)
+        {
+            catImage.sprite = levels[currentLevelIndex].catSprite;
+            catImage.SetNativeSize();
+            if (tearEffectObject) tearEffectObject.transform.localPosition = levels[currentLevelIndex].tearPosition;
+        }
+
         if (playEffects && levelUpEffect) levelUpEffect.Play();
-        if (playEffects) { if (YandexManager.Instance) YandexManager.Instance.ShowInterstitialAd(); if (SaveManager.Instance) SaveManager.Instance.Save(); }
-        if (currentLevelIndex == levels.Count - 1) { satietyDepletionRate = 0f; currentSatiety = maxSatiety; if (tearEffectObject) tearEffectObject.SetActive(false); if (playEffects) StartCoroutine(WaitAndStartEnding()); }
+
+        // Сохранение (без рекламы)
+        if (playEffects)
+        {
+            // РЕКЛАМА ОТКЛЮЧЕНА ПО ПРОСЬБЕ:
+            // if (YandexManager.Instance) YandexManager.Instance.ShowInterstitialAd(); 
+
+            if (SaveManager.Instance) SaveManager.Instance.Save();
+        }
+
+        if (currentLevelIndex == levels.Count - 1)
+        {
+            satietyDepletionRate = 0f;
+            currentSatiety = maxSatiety;
+            if (tearEffectObject) tearEffectObject.SetActive(false);
+            if (playEffects) StartCoroutine(WaitAndStartEnding());
+        }
     }
+
     private IEnumerator WaitAndStartEnding() { yield return new WaitForSeconds(endingDelay); StartEndingSequence(); }
     private void StartEndingSequence() { if (endingPanel) { CanvasGroup cg = SetupCanvasGroup(endingPanel); cg.alpha = 0f; endingPanel.SetActive(true); if (endingVideoPlayer) { endingVideoPlayer.isLooping = false; StartCoroutine(PrepareAndPlayEnding(endingVideoPlayer)); } if (endingMusic) AudioManager.Instance.PlayMusic(endingMusic); StartCoroutine(FadeInEndingPanel(cg)); } else this.enabled = false; }
     private IEnumerator PrepareAndPlayEnding(VideoPlayer vp) { yield return StartCoroutine(PrepareVideoSafe(vp, endingVideoName)); if (vp.isPrepared) { vp.Play(); isWatchingEnding = true; } else { if (postVideoUI) postVideoUI.SetActive(true); } }
     private IEnumerator FadeInEndingPanel(CanvasGroup cg) { float t = 0f; while (t < endingFadeDuration) { t += Time.deltaTime; cg.alpha = Mathf.Lerp(0f, 1f, t / endingFadeDuration); yield return null; } cg.alpha = 1f; if (mainGamePanel) mainGamePanel.SetActive(false); }
 
+    #endregion
+
+
+    #region --- РЕКЛАМА И СОХРАНЕНИЯ (ADS & SAVE) ---
+
     public void WatchAdForSuperFood() { pendingAdReward = AdRewardType.SuperFood; if (YandexManager.Instance) YandexManager.Instance.ShowRewardAd(); }
     public void WatchAdForDoubleScore() { pendingAdReward = AdRewardType.DoubleScore; if (YandexManager.Instance) YandexManager.Instance.ShowRewardAd(); }
-    private void OnAdRewarded() { if (pendingAdReward == AdRewardType.SuperFood) SuperFeedCat(); else if (pendingAdReward == AdRewardType.DoubleScore) { if (score > 0) score *= 2; else score += 100; currentDoubleScoreTimer = doubleScoreCooldown; } pendingAdReward = AdRewardType.None; UpdateAllUITexts(); if (SaveManager.Instance != null) SaveManager.Instance.Save(); }
+
+    private void OnAdRewarded()
+    {
+        if (pendingAdReward == AdRewardType.SuperFood) SuperFeedCat();
+        else if (pendingAdReward == AdRewardType.DoubleScore)
+        {
+            if (score > 0) score *= 2; else score += 100;
+            currentDoubleScoreTimer = doubleScoreCooldown;
+        }
+        pendingAdReward = AdRewardType.None;
+        UpdateAllUITexts();
+        if (SaveManager.Instance != null) SaveManager.Instance.Save();
+    }
+
     public int GetCurrentLevel() { return currentLevelIndex; }
-    public void LoadGameState(double loadedScore, int loadedLevel, bool introSeen) { score = loadedScore; currentLevelIndex = loadedLevel; hasWatchedIntro = introSeen; UpdateAllUITexts(); UpdateProgressBar(); ApplyLevelUp(false); }
+
+    public void LoadGameState(double loadedScore, int loadedLevel, bool introSeen)
+    {
+        score = loadedScore;
+        currentLevelIndex = loadedLevel;
+        hasWatchedIntro = introSeen;
+        UpdateAllUITexts();
+        UpdateProgressBar();
+        ApplyLevelUp(false);
+    }
+
+    #endregion
+
+
+    #region --- УТИЛИТЫ (UTILS) ---
+
     private void UpdateAllUITexts() { if (totalScoreText) totalScoreText.text = FormatNumber(score); if (perSecondText) perSecondText.text = $"{FormatNumber(scorePerSecond * passiveMultiplier)}/сек"; }
-    private void UpdateProgressBar() { if (!levelProgressBar) return; if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1) { levelProgressBar.value = 1; if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}"; if (progressText) progressText.text = "МАКС."; return; } double barEndValue = levels[currentLevelIndex + 1].scoreToReach; levelProgressBar.minValue = 0f; levelProgressBar.maxValue = (float)barEndValue; levelProgressBar.value = (float)score; if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}"; if (progressText) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}"; }
+
+    private void UpdateProgressBar()
+    {
+        if (!levelProgressBar) return;
+        if (currentLevelIndex >= levels.Count - 1 && levels.Count > 1)
+        {
+            levelProgressBar.value = 1;
+            if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
+            if (progressText) progressText.text = "МАКС.";
+            return;
+        }
+        double barEndValue = levels[currentLevelIndex + 1].scoreToReach;
+        levelProgressBar.minValue = 0f;
+        levelProgressBar.maxValue = (float)barEndValue;
+        levelProgressBar.value = (float)score;
+        if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
+        if (progressText) progressText.text = $"{FormatNumber(score)} / {FormatNumber(barEndValue)}";
+    }
+
     public float GetSatietyPercentage() { return maxSatiety == 0 ? 0 : currentSatiety / maxSatiety; }
+
     private CanvasGroup SetupCanvasGroup(GameObject panel) { CanvasGroup cg = panel.GetComponent<CanvasGroup>(); if (cg == null) cg = panel.AddComponent<CanvasGroup>(); cg.alpha = 1f; cg.blocksRaycasts = true; return cg; }
+
     private string FormatNumber(double number) { if (number < 1000) return number.ToString("F0"); if (number < 1_000_000) return (number / 1000).ToString("F1") + "K"; if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M"; if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "Б"; if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Т"; return (number / 1_000_000_000_000_000).ToString("F1") + "Кв"; }
+
     public void RestartGame() { SceneManager.LoadScene(SceneManager.GetActiveScene().name); }
     public void ExitGame() { Application.Quit(); }
 
