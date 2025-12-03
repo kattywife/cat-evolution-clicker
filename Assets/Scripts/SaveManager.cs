@@ -1,12 +1,12 @@
 using UnityEngine;
 using System;
 
-
 [Serializable]
 public class GameData
 {
     public double score;
     public int levelIndex;
+    public bool introWatched; // <--- НОВОЕ ПОЛЕ: Видел ли игрок интро
 }
 
 public class SaveManager : MonoBehaviour
@@ -34,12 +34,20 @@ public class SaveManager : MonoBehaviour
 
     private void Update()
     {
-        // Автосохранение
         autoSaveTimer += Time.deltaTime;
         if (autoSaveTimer >= AUTO_SAVE_INTERVAL)
         {
             Save();
             autoSaveTimer = 0f;
+        }
+    }
+
+    // Сохраняем при уходе со вкладки (сворачивание браузера)
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (!hasFocus)
+        {
+            Save();
         }
     }
 
@@ -51,12 +59,14 @@ public class SaveManager : MonoBehaviour
         data.score = gameManager.score;
         data.levelIndex = gameManager.GetCurrentLevel();
 
+        // Берём информацию о просмотре интро из GameManager
+        data.introWatched = gameManager.hasWatchedIntro;
+
         string json = JsonUtility.ToJson(data);
 
         if (YandexManager.Instance != null)
         {
             YandexManager.Instance.SaveData(json);
-            // Debug.Log("Game Saved: " + json);
         }
     }
 
@@ -69,7 +79,8 @@ public class SaveManager : MonoBehaviour
             GameData data = JsonUtility.FromJson<GameData>(json);
             if (gameManager != null)
             {
-                gameManager.LoadGameState(data.score, data.levelIndex);
+                // Передаем также статус интро
+                gameManager.LoadGameState(data.score, data.levelIndex, data.introWatched);
             }
         }
         catch (Exception e)
