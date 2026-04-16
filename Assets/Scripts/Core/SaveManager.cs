@@ -67,96 +67,53 @@ public class SaveManager : MonoBehaviour
         }
     }
 
+        // В методе Save
     public void Save()
     {
-        // Если данные еще не загрузились при старте, не сохраняем (чтобы не затереть облако нулями)
         if (!isDataLoaded) return; 
+        if (EconomyManager.Instance == null) return;
 
-        if (EconomyManager.Instance == null || ShopManager.Instance == null) return;
+        GameData data = new GameData();
+        data.score = EconomyManager.Instance.score;
+        
+        // ЗАЩИТА: Если по какой-то причине множители стали 0, принудительно ставим 1
+        data.scorePerClick = Math.Max(1.0, EconomyManager.Instance.scorePerClick);
+        data.scorePerSecond = EconomyManager.Instance.scorePerSecond;
+        data.clickMultiplier = Math.Max(1.0, EconomyManager.Instance.clickMultiplier);
+        data.passiveMultiplier = Math.Max(1.0, EconomyManager.Instance.passiveMultiplier);
+        
+        data.levelIndex = ProgressionManager.Instance.GetCurrentLevel();
+        data.unlockedItemsCount = ShopManager.Instance.GetUnlockedCount();
+        data.introWatched = CutsceneManager.Instance.hasWatchedIntro;
 
-        try
-        {
-            GameData data = new GameData();
-            
-            // 1. Базовый прогресс
-            data.score = EconomyManager.Instance.score;
-            data.levelIndex = ProgressionManager.Instance.GetCurrentLevel();
-            data.introWatched = CutsceneManager.Instance.hasWatchedIntro;
-
-            // 2. Магазин
-            data.unlockedItemsCount = ShopManager.Instance.GetUnlockedCount();
-
-            // 3. Экономика
-            data.scorePerClick = EconomyManager.Instance.scorePerClick;
-            data.scorePerSecond = EconomyManager.Instance.scorePerSecond;
-            data.clickMultiplier = EconomyManager.Instance.clickMultiplier;
-            data.passiveMultiplier = EconomyManager.Instance.passiveMultiplier;
-
-            string json = JsonUtility.ToJson(data);
-            
-            if (YandexManager.Instance != null)
-            {
-                YandexManager.Instance.SaveData(json);
-                Debug.Log("[SaveManager] Game Saved: " + json);
-            }
-        }
-        catch (Exception e)
-        {
-            Debug.LogError("[SaveManager] Save Error: " + e.Message);
-        }
+        string json = JsonUtility.ToJson(data);
+        YandexManager.Instance.SaveData(json);
     }
 
+    // В методе HandleLoad
     private void HandleLoad(string json)
     {
-        Debug.Log("[SaveManager] HandleLoad received: " + json);
-        
-        isDataLoaded = true; // Разрешаем сохранения теперь
-
-        if (string.IsNullOrEmpty(json) || json == "{}")
-        {
-            Debug.Log("[SaveManager] First time play or empty save.");
-            return;
-        }
+        isDataLoaded = true;
+        if (string.IsNullOrEmpty(json) || json == "{}") return;
 
         try
         {
             GameData data = JsonUtility.FromJson<GameData>(json);
 
-            // 1. Восстанавливаем экономику
-            if (EconomyManager.Instance != null)
-            {
-                EconomyManager.Instance.LoadFullEconomy(
-                    data.score, 
-                    data.scorePerClick, 
-                    data.scorePerSecond, 
-                    data.clickMultiplier, 
-                    data.passiveMultiplier
-                );
-            }
+            // ЗАЩИТА ПРИ ЗАГРУЗКЕ: Не даем нулям из облака испортить игру
+            if (data.scorePerClick < 1) data.scorePerClick = 1;
+            if (data.clickMultiplier < 1) data.clickMultiplier = 1;
+            if (data.passiveMultiplier < 1) data.passiveMultiplier = 1;
 
-            // 2. Восстанавливаем магазин
-            if (ShopManager.Instance != null)
-            {
-                ShopManager.Instance.LoadUnlockedCount(data.unlockedItemsCount);
-            }
-
-            // 3. Восстанавливаем уровень кота
-            if (ProgressionManager.Instance != null)
-            {
-                ProgressionManager.Instance.LoadLevel(data.levelIndex);
-            }
-
-            // 4. Интро
-            if (CutsceneManager.Instance != null)
-            {
-                CutsceneManager.Instance.hasWatchedIntro = data.introWatched;
-            }
-
-            Debug.Log("[SaveManager] Data successfully applied!");
+            EconomyManager.Instance.LoadFullEconomy(
+                data.score, data.scorePerClick, data.scorePerSecond, 
+                data.clickMultiplier, data.passiveMultiplier
+            );
+            
+            ShopManager.Instance.LoadUnlockedCount(data.unlockedItemsCount);
+            ProgressionManager.Instance.LoadLevel(data.levelIndex);
+            CutsceneManager.Instance.hasWatchedIntro = data.introWatched;
         }
-        catch (Exception e)
-        {
-            Debug.LogError("[SaveManager] Load Parsing Error: " + e.Message);
-        }
+        catch (Exception e) { Debug.LogError(e.Message); }
     }
 }

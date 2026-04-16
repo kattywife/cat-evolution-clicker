@@ -66,6 +66,12 @@ public class ShopManager : MonoBehaviour
             buttonUI.Setup(upgrade, this); 
             shopButtons.Add(buttonUI);
         }
+
+            // —брасываем прокрутку в самый верх (1.0f Ч это верх, 0.0f Ч низ)
+        if (shopScrollRect != null) 
+        {
+            shopScrollRect.verticalNormalizedPosition = 1f;
+        }
         
         Debug.Log($"[ShopManager] —оздано товаров: {shopButtons.Count}");
     }
