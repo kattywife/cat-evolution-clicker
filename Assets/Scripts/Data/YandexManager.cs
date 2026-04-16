@@ -23,7 +23,7 @@ public class YandexManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject); // Не уничтожать при смене сцен
+            DontDestroyOnLoad(transform.root.gameObject); // Не уничтожать при смене сцен
         }
         else
         {

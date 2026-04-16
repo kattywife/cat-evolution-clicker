@@ -4,7 +4,6 @@ using TMPro;
 using UnityEngine.EventSystems;
 using System.Collections;
 
-
 public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     [Header("UI Elements")]
@@ -26,26 +25,28 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     private UpgradeData currentUpgradeData;
     private int currentLevel = 0;
     private double currentCost = 0;
-    private GameManager gameManager;
+    
+    // Сменили GameManager на ShopManager
+    private ShopManager shopManager; 
     private Vector3 originalScale;
 
     // --- ЗАЩИТА ОТ ДВОЙНОГО КЛИКА ---
     private float lastClickTime = 0f;
-    private const float CLICK_COOLDOWN = 0.2f; // Задержка 0.2 секунды
+    private const float CLICK_COOLDOWN = 0.2f;
 
     void Awake()
     {
         originalScale = transform.localScale;
     }
 
-    public void Setup(UpgradeData data, GameManager manager)
+    // ИСПРАВЛЕНО: Теперь принимает ShopManager
+    public void Setup(UpgradeData data, ShopManager manager)
     {
         currentUpgradeData = data;
-        gameManager = manager;
+        shopManager = manager;
         currentLevel = 0;
         currentCost = currentUpgradeData.baseCost;
 
-        // Чистим старые и добавляем новые события
         if (purchaseButton != null)
         {
             purchaseButton.onClick.RemoveAllListeners();
@@ -53,6 +54,9 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         }
 
         UpdateTextAndIcons();
+        
+        if (currentUpgradeData != null)
+            Debug.Log($"<color=white>[Button UI]</color> Товар '{currentUpgradeData.upgradeName}' инициализирован.");
     }
 
     public void SetLockedState(bool isLocked)
@@ -68,24 +72,33 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
     public void OnPurchaseClicked()
     {
-        // --- ПРОВЕРКА ЗАЩИТЫ ---
-        // Если с прошлого клика прошло слишком мало времени - игнорируем этот клик
-        if (Time.time - lastClickTime < CLICK_COOLDOWN)
+        if (Time.time - lastClickTime < CLICK_COOLDOWN) return;
+        lastClickTime = Time.time;
+
+        if (shopManager == null)
         {
+            Debug.LogError("<color=red>[Button UI]</color> Ошибка: ShopManager не привязан к кнопке!");
             return;
         }
-        lastClickTime = Time.time; // Обновляем время последнего клика
-        // -----------------------
 
-        if (gameManager != null && gameManager.score >= currentCost)
+        if (EconomyManager.Instance != null && EconomyManager.Instance.score >= currentCost)
         {
-            gameManager.PurchaseUpgrade(currentUpgradeData, currentCost, this);
+            Debug.Log($"<color=yellow>[Button UI]</color> Запрос на покупку: {currentUpgradeData.upgradeName}");
+            shopManager.PurchaseUpgrade(currentUpgradeData, currentCost, this);
+        }
+        else
+        {
+            Debug.Log("<color=orange>[Button UI]</color> Недостаточно средств для покупки.");
         }
     }
 
     public void OnPurchaseSuccess()
     {
-        AudioManager.Instance.PlaySound(purchaseSound);
+        Debug.Log($"<color=green>[Button UI]</color> Покупка '{currentUpgradeData.upgradeName}' успешна!");
+        
+        if (purchaseSound && AudioManager.Instance) 
+            AudioManager.Instance.PlaySound(purchaseSound);
+
         currentLevel++;
         currentCost *= currentUpgradeData.costMultiplier;
         UpdateTextAndIcons();
@@ -97,11 +110,6 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         {
             purchaseButton.interactable = currentScore >= currentCost;
         }
-    }
-
-    public bool IsInteractable()
-    {
-        return purchaseButton != null && purchaseButton.interactable;
     }
 
     public void UpdateTextAndIcons()
@@ -135,11 +143,13 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         }
     }
 
+    #region --- АНИМАЦИИ И ФОРМАТИРОВАНИЕ ---
+
     public void OnPointerEnter(PointerEventData eventData)
     {
         if (purchaseButton != null && purchaseButton.interactable)
         {
-            AudioManager.Instance.PlaySound(hoverSound);
+            if (hoverSound && AudioManager.Instance) AudioManager.Instance.PlaySound(hoverSound);
             StopAllCoroutines();
             StartCoroutine(ScaleOverTime(originalScale * scaleFactor, animationDuration));
         }
@@ -167,11 +177,15 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
     private string FormatNumber(double number)
     {
+        // Используем форматирование из EconomyManager, если он доступен
+        if (EconomyManager.Instance != null) return EconomyManager.Instance.FormatNumber(number);
+
+        // Запасной вариант, если EconomyManager еще не проснулся
         if (number < 1000) return number.ToString("F0");
         if (number < 1_000_000) return (number / 1000).ToString("F1") + "К";
         if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "М";
-        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "Б";
-        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Т";
-        return (number / 1_000_000_000_000_000).ToString("F1") + "Кв";
+        return (number / 1_000_000_000).ToString("F1") + "Б";
     }
+
+    #endregion
 }

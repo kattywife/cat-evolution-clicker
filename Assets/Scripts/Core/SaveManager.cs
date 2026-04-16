@@ -6,20 +6,19 @@ public class GameData
 {
     public double score;
     public int levelIndex;
-    public bool introWatched; // <--- НОВОЕ ПОЛЕ: Видел ли игрок интро
+    public bool introWatched; // Видел ли игрок интро
 }
 
 public class SaveManager : MonoBehaviour
 {
     public static SaveManager Instance;
-    public GameManager gameManager;
 
     private float autoSaveTimer = 0f;
     private const float AUTO_SAVE_INTERVAL = 30f; // Сохраняем каждые 30 секунд
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
+        Instance = this;
     }
 
     private void Start()
@@ -53,14 +52,15 @@ public class SaveManager : MonoBehaviour
 
     public void Save()
     {
-        if (gameManager == null) return;
+        // Защита от сохранения до загрузки сцены
+        if (EconomyManager.Instance == null || ProgressionManager.Instance == null) return;
 
         GameData data = new GameData();
-        data.score = gameManager.score;
-        data.levelIndex = gameManager.GetCurrentLevel();
-
-        // Берём информацию о просмотре интро из GameManager
-        data.introWatched = gameManager.hasWatchedIntro;
+        
+        // Берем данные из новых менеджеров:
+        data.score = EconomyManager.Instance.score;
+        data.levelIndex = ProgressionManager.Instance.GetCurrentLevel();
+        data.introWatched = CutsceneManager.Instance.hasWatchedIntro;
 
         string json = JsonUtility.ToJson(data);
 
@@ -77,11 +77,16 @@ public class SaveManager : MonoBehaviour
         try
         {
             GameData data = JsonUtility.FromJson<GameData>(json);
-            if (gameManager != null)
-            {
-                // Передаем также статус интро
-                gameManager.LoadGameState(data.score, data.levelIndex, data.introWatched);
-            }
+
+            // Раздаем загруженные данные каждому менеджеру:
+            if (EconomyManager.Instance != null)
+                EconomyManager.Instance.LoadEconomy(data.score);
+
+            if (ProgressionManager.Instance != null)
+                ProgressionManager.Instance.LoadLevel(data.levelIndex);
+
+            if (CutsceneManager.Instance != null)
+                CutsceneManager.Instance.hasWatchedIntro = data.introWatched;
         }
         catch (Exception e)
         {

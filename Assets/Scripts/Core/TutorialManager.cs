@@ -4,7 +4,6 @@ using System.Collections;
 public class TutorialManager : MonoBehaviour
 {
     public static TutorialManager Instance;
-    public GameManager gameManager;
 
     [Header("Ссылки на облачка (расставь в сцене)")]
     public TutorialTooltip tooltipClickCat;    // 1. Кликай на котика
@@ -13,8 +12,8 @@ public class TutorialManager : MonoBehaviour
     public TutorialTooltip tooltipFeedCat;     // 4. Покорми котика
 
     [Header("Настройки")]
-    public float step1Delay = 4.0f;    // <--- НОВОЕ: Задержка появления первого совета
-    public float step2Duration = 7.0f; // Сколько висит совет про монетки
+    public float step1Delay = 4.0f;    
+    public float step2Duration = 7.0f; 
 
     // Флаги состояния
     private bool step1Done = false;
@@ -26,61 +25,61 @@ public class TutorialManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
+        Instance = this;
     }
 
     private IEnumerator Start()
     {
-        // Ждем инициализации GameManager
-        yield return new WaitForSeconds(0.5f);
+        // Ждем немного, чтобы все менеджеры (Economy, Progression) успели проснуться
+        yield return new WaitForSeconds(0.6f);
 
-        if (gameManager == null)
+        if (GameManager.Instance == null)
         {
-            Debug.LogError("TutorialManager: Не привязан GameManager!");
+            Debug.LogError("<color=red>[Tutorial]</color> GameManager.Instance не найден! Туториал не может быть запущен.");
             yield break;
         }
 
-        // Если новая игра
-        if (gameManager.score == 0 && gameManager.GetCurrentLevel() == 0)
+        // Если новая игра (0 очков и 0 уровень)
+        if (EconomyManager.Instance.score <= 0 && ProgressionManager.Instance.GetCurrentLevel() == 0)
         {
-            // Вместо мгновенного показа запускаем таймер
+            Debug.Log("<color=cyan>[Tutorial]</color> Новая игра обнаружена. Запускаю таймер первого шага.");
             StartCoroutine(Step1DelayRoutine());
         }
         else
         {
-            // Если загрузка - пропускаем начало
+            Debug.Log("<color=cyan>[Tutorial]</color> Загружено сохранение. Пропускаю первые шаги обучения.");
             step1Done = true;
             step2Done = true;
             step3Done = true;
+            // Шаг 4 (голод) оставляем, он может понадобиться позже
         }
     }
 
-    // <--- НОВАЯ ЛОГИКА: Таймер первого шага
     private IEnumerator Step1DelayRoutine()
     {
-        // Ждем 4 секунды (или сколько настроишь)
         yield return new WaitForSeconds(step1Delay);
 
-        // ВАЖНО: Если игрок за эти 4 секунды еще НЕ начал кликать сам,
-        // тогда показываем совет. Если уже начал - не мешаем.
         if (!step1Done)
         {
+            Debug.Log("<color=white>[Tutorial]</color> Показываю Шаг 1: Клик по коту.");
             ShowStep1_ClickCat();
         }
     }
 
     private void Update()
     {
-        if (gameManager == null) return;
+        // Если геймплей еще не начался или GameManager выключен (например, в конце игры)
+        if (GameManager.Instance == null || !GameManager.Instance.enabled) return;
 
         // ЛОГИКА ШАГА 3 (Магазин)
         if (step2Done && !step3Done && !step3Shown)
         {
-            if (gameManager.upgrades != null && gameManager.upgrades.Count > 0)
+            if (ShopManager.Instance != null && ShopManager.Instance.upgrades.Count > 0)
             {
-                double cost = gameManager.upgrades[0].baseCost;
-                if (gameManager.score >= cost)
+                double cost = ShopManager.Instance.upgrades[0].baseCost;
+                if (EconomyManager.Instance.score >= cost)
                 {
+                    Debug.Log("<color=white>[Tutorial]</color> Очков достаточно для покупки. Показываю Шаг 3.");
                     ShowStep3_BuyUpgrade();
                 }
             }
@@ -89,9 +88,9 @@ public class TutorialManager : MonoBehaviour
         // ЛОГИКА ШАГА 4 (Голод)
         if (step2Done && !step4Done && !step4Shown)
         {
-            // <--- ИЗМЕНЕНИЕ: Теперь строго, когда упало до 0 (или ниже)
-            if (gameManager.currentSatiety <= 0f)
+            if (SatietyManager.Instance != null && SatietyManager.Instance.currentSatiety <= 0f)
             {
+                Debug.Log("<color=white>[Tutorial]</color> Котик проголодался. Показываю Шаг 4.");
                 ShowStep4_FeedCat();
             }
         }
@@ -108,11 +107,9 @@ public class TutorialManager : MonoBehaviour
         if (!step1Done)
         {
             step1Done = true;
-
-            // Скрываем совет (если он успел появиться)
+            Debug.Log("<color=green>[Tutorial]</color> Шаг 1 выполнен (Клик).");
+            
             if (tooltipClickCat) tooltipClickCat.Hide();
-
-            // Сразу переходим к шагу 2
             ShowStep2_EarnMoney();
         }
     }
@@ -120,6 +117,7 @@ public class TutorialManager : MonoBehaviour
     // --- ШАГ 2: МОНЕТКИ ---
     public void ShowStep2_EarnMoney()
     {
+        Debug.Log("<color=white>[Tutorial]</color> Показываю Шаг 2: Рассказ про монетки.");
         if (tooltipEarnMoney)
         {
             tooltipEarnMoney.Show();
@@ -136,6 +134,7 @@ public class TutorialManager : MonoBehaviour
         yield return new WaitForSeconds(step2Duration);
         if (tooltipEarnMoney) tooltipEarnMoney.Hide();
         step2Done = true;
+        Debug.Log("<color=green>[Tutorial]</color> Шаг 2 завершен по времени.");
     }
 
     // --- ШАГ 3: ПОКУПКА ---
@@ -149,6 +148,7 @@ public class TutorialManager : MonoBehaviour
     {
         if (step3Shown && !step3Done)
         {
+            Debug.Log("<color=green>[Tutorial]</color> Шаг 3 выполнен (Апгрейд куплен).");
             if (tooltipBuyUpgrade) tooltipBuyUpgrade.Hide();
             step3Done = true;
         }
@@ -165,6 +165,7 @@ public class TutorialManager : MonoBehaviour
     {
         if (step4Shown && !step4Done)
         {
+            Debug.Log("<color=green>[Tutorial]</color> Шаг 4 выполнен (Кот сыт).");
             if (tooltipFeedCat) tooltipFeedCat.Hide();
             step4Done = true;
         }

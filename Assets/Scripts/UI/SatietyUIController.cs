@@ -68,7 +68,7 @@ public class SatietyUIController : MonoBehaviour
     {
         if (gameManager == null) return;
 
-        float satietyPercentage = gameManager.GetSatietyPercentage();
+        float satietyPercentage = SatietyManager.Instance.GetSatietyPercentage();
         satietyProgressBar.fillAmount = Mathf.Clamp01(satietyPercentage);
         satietyText.text = (satietyPercentage * 100).ToString("F0") + "%";
 
@@ -77,7 +77,7 @@ public class SatietyUIController : MonoBehaviour
         bool canFeed = satietyPercentage < 1.0f;
 
         // Кнопка обычного корма активна, если можно кормить И хватает очков.
-        feedButton.interactable = canFeed && gameManager.score >= feedCost;
+        feedButton.interactable = canFeed && EconomyManager.Instance.score >= feedCost;
 
         // Кнопка супер-корма активна, только если можно кормить.
         superFeedButton.interactable = canFeed;
@@ -137,7 +137,7 @@ public class SatietyUIController : MonoBehaviour
 
     public void DropTear(int side)
     {
-        if (gameManager.GetSatietyPercentage() > 0)
+        if (SatietyManager.Instance.GetSatietyPercentage() > 0)
         {
             return;
         }
@@ -221,10 +221,13 @@ public class SatietyUIController : MonoBehaviour
 
     void OnFeedButtonClicked()
     {
-        if (gameManager.score >= feedCost)
+        if (EconomyManager.Instance.score >= feedCost)
         {
             AudioManager.Instance.PlaySound(feedButtonSound);
-            gameManager.FeedCat(feedCost, feedAmount);
+            if (EconomyManager.Instance.SpendScore(feedCost)) // Проверяем и списываем очки
+            {
+                SatietyManager.Instance.Feed(feedAmount); // Если очки списались, кормим кота
+            }
             feedCost *= costIncreaseMultiplier;
         }
     }

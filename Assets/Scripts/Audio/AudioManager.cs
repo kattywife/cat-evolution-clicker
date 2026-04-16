@@ -19,8 +19,7 @@ public class AudioManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject);
-
+            DontDestroyOnLoad(transform.root.gameObject);
             // Загружаем состояние (1 = выключено, 0 = включено)
             isMuted = PlayerPrefs.GetInt(MutePrefKey, 0) == 1;
             ApplyMuteState();
