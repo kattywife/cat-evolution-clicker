@@ -1,0 +1,75 @@
+Структура папок тома Windows 11
+Серийный номер тома: 68E6-ACDB
+C:.
+|   Audio.meta
+|   Core.meta
+|   Data.meta
+|   scripts_tree.txt
+|   SDK.meta
+|   UI.meta
+|   Utils.meta
+|   Yandex.meta
+|   
++---Audio
+|       AudioManager.cs
+|       AudioManager.cs.meta
+|       AudioMuteSync.cs
+|       AudioMuteSync.cs.meta
+|       SoundButton.cs
+|       SoundButton.cs.meta
+|       
++---Core
+|       CutsceneManager.cs
+|       CutsceneManager.cs.meta
+|       EconomyManager.cs
+|       EconomyManager.cs.meta
+|       EndingStoryController.cs
+|       EndingStoryController.cs.meta
+|       GameManager.cs
+|       GameManager.cs.meta
+|       ProgressionManager.cs
+|       ProgressionManager.cs.meta
+|       SatietyManager.cs
+|       SatietyManager.cs.meta
+|       SaveManager.cs
+|       SaveManager.cs.meta
+|       ShopManager.cs
+|       ShopManager.cs.meta
+|       TutorialManager.cs
+|       TutorialManager.cs.meta
+|       
++---Data
+|       LevelData.cs
+|       LevelData.cs.meta
+|       UpgradeData.cs
+|       UpgradeData.cs.meta
+|       YandexManager.cs
+|       YandexManager.cs.meta
+|       
++---SDK
+|       YandexAudioHandler.cs
+|       YandexAudioHandler.cs.meta
+|       
++---UI
+|       FloatingText.cs
+|       FloatingText.cs.meta
+|       InteractiveButton.cs
+|       InteractiveButton.cs.meta
+|       PulsingUI.cs
+|       PulsingUI.cs.meta
+|       SatietyUIController.cs
+|       SatietyUIController.cs.meta
+|       SimpleButtonEffect.cs
+|       SimpleButtonEffect.cs.meta
+|       TutorialTooltip.cs
+|       TutorialTooltip.cs.meta
+|       UpgradeButtonUI.cs
+|       UpgradeButtonUI.cs.meta
+|       
++---Utils
+|       CatAnimationHelper.cs
+|       CatAnimationHelper.cs.meta
+|       DestroyAfterTime.cs
+|       DestroyAfterTime.cs.meta
+|       
+\---Yandex

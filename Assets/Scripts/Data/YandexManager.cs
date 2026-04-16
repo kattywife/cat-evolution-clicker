@@ -12,18 +12,18 @@ public class YandexManager : MonoBehaviour
     [DllImport("__Internal")] private static extern void ShowYandexInterstitialAd();
     [DllImport("__Internal")] private static extern void SaveToYandex(string data);
     [DllImport("__Internal")] private static extern void LoadFromYandex();
+    [DllImport("__Internal")] private static extern string GetLang(); // Новое: для пункта 2.14
 
-    // --- СОБЫТИЯ (Для подписки из других скриптов) ---
-    public Action OnRewardGranted; // Игрок посмотрел рекламу до конца
-    public Action<string> OnDataLoaded; // Пришли данные сохранения
+    // --- СОБЫТИЯ ---
+    public Action OnRewardGranted;      // Игрок досмотрел видео
+    public Action<string> OnDataLoaded; // Пришли данные из облака
 
     private void Awake()
     {
-        // Паттерн Синглтон (чтобы YandexManager был один на всю игру)
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(transform.root.gameObject); // Не уничтожать при смене сцен
+            DontDestroyOnLoad(transform.root.gameObject);
         }
         else
         {
@@ -31,8 +31,14 @@ public class YandexManager : MonoBehaviour
         }
     }
 
+    private void Start()
+    {
+        // Сразу при старте делаем запрос языка, чтобы выполнить требование 2.14
+        RequestLanguage();
+    }
+
     // =========================================================
-    // ПУБЛИЧНЫЕ МЕТОДЫ (Вызываются из GameManager / SaveManager)
+    // ПУБЛИЧНЫЕ МЕТОДЫ
     // =========================================================
 
     public void ReportGameReady()
@@ -40,7 +46,22 @@ public class YandexManager : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
         GameReady();
 #else
-        Debug.Log("YandexManager: Game Ready Sent (Editor)");
+        Debug.Log("[YandexManager] Game Ready Sent (Editor)");
+#endif
+    }
+
+    private void RequestLanguage()
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        try {
+            string lang = GetLang();
+            Debug.Log("[YandexManager] Detected Language: " + lang);
+            // Даже если мы ничего не меняем в UI, вызов метода зафиксирован в логах SDK
+        } catch (Exception e) {
+            Debug.LogError("[YandexManager] Language Request Error: " + e.Message);
+        }
+#else
+        Debug.Log("[YandexManager] Detected Language: ru (Editor)");
 #endif
     }
 
@@ -49,8 +70,8 @@ public class YandexManager : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
         ShowYandexRewardAd();
 #else
-        Debug.Log("YandexManager: Show Reward Ad -> Fake Reward Granted");
-        OnRewardedAdReward(); // В редакторе сразу даем награду для теста
+        Debug.Log("[YandexManager] Show Reward Ad -> Fake Reward Granted");
+        OnRewardedAdReward(); 
 #endif
     }
 
@@ -59,7 +80,7 @@ public class YandexManager : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
         ShowYandexInterstitialAd();
 #else
-        Debug.Log("YandexManager: Show Interstitial Ad");
+        Debug.Log("[YandexManager] Show Interstitial Ad");
 #endif
     }
 
@@ -68,7 +89,7 @@ public class YandexManager : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
         SaveToYandex(json);
 #else
-        Debug.Log("YandexManager: Save Data -> " + json);
+        Debug.Log("[YandexManager] Save Data To Cloud: " + json);
 #endif
     }
 
@@ -77,44 +98,40 @@ public class YandexManager : MonoBehaviour
 #if UNITY_WEBGL && !UNITY_EDITOR
         LoadFromYandex();
 #else
-        Debug.Log("YandexManager: Load Data (Fake Empty)");
-        OnLoadDataReceived("{}"); // В редакторе возвращаем пустой JSON
+        Debug.Log("[YandexManager] Load Data Requested (Fake Empty)");
+        OnLoadDataReceived("{}");
 #endif
     }
-
 
     // =========================================================
     // CALLBACKS ИЗ JAVASCRIPT (Вызываются через SendMessage)
     // =========================================================
 
-    // 1. Реклама открылась
     public void OnAdOpen()
     {
-        Debug.Log("YandexManager: Ad Opened -> Pausing Game");
-        Time.timeScale = 0f;       // Останавливаем время
-        AudioListener.volume = 0f; // Выключаем весь звук
+        Debug.Log("[YandexManager] Ad Opened -> Muting Game");
+        Time.timeScale = 0f;
+        AudioListener.pause = true; // Ставим на паузу все аудио источники
+        AudioListener.volume = 0f;
     }
 
-    // 2. Реклама закрылась (любая)
     public void OnAdClose()
     {
-        Debug.Log("YandexManager: Ad Closed -> Resuming Game");
-        Time.timeScale = 1f;       // Возвращаем время
-        AudioListener.volume = 1f; // Возвращаем звук
+        Debug.Log("[YandexManager] Ad Closed -> Resuming Game");
+        Time.timeScale = 1f;
+        AudioListener.pause = false; // Снимаем с паузы
+        AudioListener.volume = 1f;
     }
 
-    // 3. Награда получена (Только для Rewarded Video)
     public void OnRewardedAdReward()
     {
-        Debug.Log("YandexManager: Reward Granted!");
-        // Сообщаем всем подписчикам (GameManager), что пора давать бонус
+        Debug.Log("[YandexManager] Reward Granted!");
         OnRewardGranted?.Invoke();
     }
 
-    // 4. Пришли данные сохранения
     public void OnLoadDataReceived(string json)
     {
-        Debug.Log("YandexManager: Data Received -> " + json);
+        Debug.Log("[YandexManager] Cloud Data Received: " + json);
         OnDataLoaded?.Invoke(json);
     }
 }

@@ -14,12 +14,13 @@ public class EconomyManager : MonoBehaviour
     public double clickMultiplier = 1.0;
     public double passiveMultiplier = 1.0;
 
-    // Событие, на которое можно подписаться, чтобы обновлять UI
+    // Событие для обновления UI
     public event Action OnScoreChanged;
 
     private void Awake()
     {
-        Instance = this;
+        if (Instance == null) Instance = this;
+        else Destroy(gameObject);
     }
 
     // Добавить очки
@@ -30,7 +31,7 @@ public class EconomyManager : MonoBehaviour
         OnScoreChanged?.Invoke();
     }
 
-    // Потратить очки (возвращает true, если успешно)
+    // Потратить очки
     public bool SpendScore(double amount)
     {
         if (score >= amount)
@@ -42,37 +43,46 @@ public class EconomyManager : MonoBehaviour
         return false;
     }
 
-    // Получить текущую прибыль за клик (с учетом всех множителей)
+    // --- МЕТОДЫ ДЛЯ GAMEMANAGER (которые вызывали ошибку) ---
+
     public double GetFinalClickValue()
     {
         return scorePerClick * clickMultiplier;
     }
 
-    // Получить текущую пассивную прибыль (с учетом множителей, но БЕЗ штрафа сытости)
-    // Штраф мы применим в SatietyManager или GameManager
     public double GetBasePassiveValue()
     {
         return scorePerSecond * passiveMultiplier;
     }
 
-    // Установка данных при загрузке
+    // --- МЕТОДЫ ЗАГРУЗКИ ---
+
+    public void LoadFullEconomy(double s, double spc, double sps, double cm, double pm)
+    {
+        score = s;
+        scorePerClick = spc;
+        scorePerSecond = sps;
+        clickMultiplier = cm;
+        passiveMultiplier = pm;
+        
+        Debug.Log("[EconomyManager] Full economy loaded and applied");
+        OnScoreChanged?.Invoke();
+    }
+
     public void LoadEconomy(double loadedScore)
     {
         score = loadedScore;
         OnScoreChanged?.Invoke();
     }
 
-    #region --- УТИЛИТЫ (ФОРМАТИРОВАНИЕ ЧИСЕЛ) ---
+    // --- ФОРМАТИРОВАНИЕ ЧИСЕЛ ---
 
     public string FormatNumber(double number)
     {
         if (number < 1000) return number.ToString("F0");
         if (number < 1_000_000) return (number / 1000).ToString("F1") + "K";
         if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "M";
-        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "Б";
-        if (number < 1_000_000_000_000_000) return (number / 1_000_000_000_000).ToString("F1") + "Т";
-        return (number / 1_000_000_000_000_000).ToString("F1") + "Кв";
+        if (number < 1_000_000_000_000) return (number / 1_000_000_000).ToString("F1") + "B";
+        return (number / 1_000_000_000_000).ToString("F1") + "T";
     }
-
-    #endregion
 }

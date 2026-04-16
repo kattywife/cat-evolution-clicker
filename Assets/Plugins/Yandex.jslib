@@ -5,34 +5,36 @@ mergeInto(LibraryManager.library, {
     if (typeof ysdk !== 'undefined' && ysdk !== null) {
         ysdk.features.LoadingAPI.ready();
         console.log('Yandex SDK: Game Ready Reported');
-    } else {
-        console.error('Yandex SDK not initialized yet');
     }
   },
 
-  // --- Реклама за вознаграждение (Reward) ---
+  // --- Автоопределение языка (Пункт 2.14) ---
+  GetLang: function () {
+    if (typeof ysdk !== 'undefined' && ysdk !== null) {
+      var lang = ysdk.environment.i18n.lang;
+      var bufferSize = lengthBytesUTF8(lang) + 1;
+      var buffer = _malloc(bufferSize);
+      stringToUTF8(lang, buffer, bufferSize);
+      return buffer;
+    }
+    return null;
+  },
+
+  // --- Реклама за вознаграждение ---
   ShowYandexRewardAd: function () {
     if (typeof ysdk !== 'undefined' && ysdk !== null) {
       ysdk.adv.showRewardedVideo({
         callbacks: {
           onOpen: function () {
-            console.log('Reward Ad Open');
-            // Сообщаем Unity, что реклама открылась (пауза)
             if (window.myGameInstance) window.myGameInstance.SendMessage('YandexManager', 'OnAdOpen');
           },
           onRewarded: function () {
-            console.log('Reward Granted');
-            // Сообщаем Unity, что награду можно выдавать
             if (window.myGameInstance) window.myGameInstance.SendMessage('YandexManager', 'OnRewardedAdReward');
           },
           onClose: function () {
-            console.log('Reward Ad Closed');
-            // Сообщаем Unity, что реклама закрылась (снять паузу)
             if (window.myGameInstance) window.myGameInstance.SendMessage('YandexManager', 'OnAdClose');
           },
           onError: function (e) {
-            console.log('Error while open video ad:', e);
-            // Если ошибка, тоже снимаем паузу, чтобы игра не зависла
             if (window.myGameInstance) window.myGameInstance.SendMessage('YandexManager', 'OnAdClose');
           }
         }
@@ -40,21 +42,18 @@ mergeInto(LibraryManager.library, {
     }
   },
 
-  // --- Межстраничная реклама (Interstitial) ---
+  // --- Межстраничная реклама ---
   ShowYandexInterstitialAd: function () {
     if (typeof ysdk !== 'undefined' && ysdk !== null) {
       ysdk.adv.showFullscreenAdv({
         callbacks: {
           onOpen: function () {
-            console.log('Interstitial Ad Open');
             if (window.myGameInstance) window.myGameInstance.SendMessage('YandexManager', 'OnAdOpen');
           },
           onClose: function (wasShown) {
-            console.log('Interstitial Ad Closed');
             if (window.myGameInstance) window.myGameInstance.SendMessage('YandexManager', 'OnAdClose');
           },
           onError: function (error) {
-            console.log('Error while open fullscreen ad:', error);
             if (window.myGameInstance) window.myGameInstance.SendMessage('YandexManager', 'OnAdClose');
           }
         }
@@ -68,9 +67,14 @@ mergeInto(LibraryManager.library, {
     var myObj = JSON.parse(dataString);
     
     if (typeof player !== 'undefined' && player !== null) {
-        player.setData(myObj).then(() => {
+        // Мы используем flush: true для надежности сохранения
+        player.setData(myObj, {flush: true}).then(() => {
             console.log('Data saved to Yandex');
+        }).catch(err => {
+            console.error('Save error:', err);
         });
+    } else {
+        console.warn('Player not initialized for saving');
     }
   },
 
@@ -83,9 +87,8 @@ mergeInto(LibraryManager.library, {
                 window.myGameInstance.SendMessage('YandexManager', 'OnLoadDataReceived', jsonString);
         });
     } else {
-        // Если игрока нет (не авторизован), пробуем инициализировать
         if (typeof ysdk !== 'undefined' && ysdk !== null) {
-            ysdk.getPlayer().then(_player => {
+            ysdk.getPlayer({scopes: false}).then(_player => {
                 player = _player;
                 player.getData().then((data) => {
                     var jsonString = JSON.stringify(data);
@@ -93,8 +96,7 @@ mergeInto(LibraryManager.library, {
                         window.myGameInstance.SendMessage('YandexManager', 'OnLoadDataReceived', jsonString);
                 });
             }).catch(err => {
-                console.log('Player initialization error or guest mode');
-                // Отправляем пустой json чтобы игра продолжилась
+                console.log('Guest mode or player error');
                 if (window.myGameInstance) 
                     window.myGameInstance.SendMessage('YandexManager', 'OnLoadDataReceived', "{}");
             });
