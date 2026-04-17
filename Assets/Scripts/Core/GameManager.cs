@@ -100,6 +100,13 @@ public class GameManager : MonoBehaviour
     {
         if (EconomyManager.Instance == null) return;
 
+        // --- НОВОЕ: Включаем голод при первом клике ---
+        if (SatietyManager.Instance != null)
+        {
+            SatietyManager.Instance.StartHunger();
+        }
+        // ----------------------------------------------
+
         AudioManager.Instance.PlaySound(catClickSound);
         
         double clickValue = EconomyManager.Instance.GetFinalClickValue();

@@ -14,23 +14,23 @@ public class SatietyManager : MonoBehaviour
     [Header("Визуальные эффекты")]
     public GameObject tearEffectObject;
 
-    // Событие для обновления UI (слайдера)
+    // --- НОВОЕ: Переменная для задержки голода ---
+    private bool canDeplete = false; 
+
     public event Action<float> OnSatietyChanged;
-    
-    private void Awake()
-    {
-        Instance = this;
-    }
+
+    private void Awake() => Instance = this;
 
     private void Start()
     {
+        // Начинаем всегда со 100%
         currentSatiety = maxSatiety;
     }
 
     private void Update()
     {
-        // Если котик на максимальном уровне (финал), голод отключается
-        if (satietyDepletionRate <= 0) return;
+        // --- ПРАВКА: Если голод не активирован ИЛИ мы в финале — выходим ---
+        if (!canDeplete || satietyDepletionRate <= 0) return;
 
         if (currentSatiety > 0)
         {
@@ -43,10 +43,18 @@ public class SatietyManager : MonoBehaviour
         UpdateTearEffect();
     }
 
-    // Проверка: котик голоден?
+    // --- НОВОЕ: Метод, который вызывает GameManager при первом клике ---
+    public void StartHunger()
+    {
+        if (!canDeplete)
+        {
+            canDeplete = true;
+            Debug.Log("[SatietyManager] Голод активирован первым кликом!");
+        }
+    }
+
     public bool IsStarving() => currentSatiety <= 0;
 
-    // Получить текущий множитель для пассивного дохода
     public double GetCurrentSatietyMultiplier()
     {
         return IsStarving() ? (double)satietyPenaltyMultiplier : 1.0;
@@ -55,30 +63,22 @@ public class SatietyManager : MonoBehaviour
     private void UpdateTearEffect()
     {
         if (tearEffectObject == null) return;
-
         bool shouldShowTears = IsStarving();
         if (tearEffectObject.activeSelf != shouldShowTears)
-        {
             tearEffectObject.SetActive(shouldShowTears);
-        }
     }
 
-    // Обычная кормежка
     public void Feed(float amount)
     {
         currentSatiety = Mathf.Min(maxSatiety, currentSatiety + amount);
         OnSatietyChanged?.Invoke(GetSatietyPercentage());
-        
-        // Уведомляем туториал
         if (TutorialManager.Instance) TutorialManager.Instance.OnCatFed();
     }
 
-    // Супер-кормежка (за рекламу)
     public void SuperFeed()
     {
-        currentSatiety = maxSatiety * 2.0f; // Можно сделать больше максимума
+        currentSatiety = maxSatiety * 2.0f; 
         OnSatietyChanged?.Invoke(GetSatietyPercentage());
-
         if (TutorialManager.Instance) TutorialManager.Instance.OnCatFed();
     }
 
@@ -87,12 +87,25 @@ public class SatietyManager : MonoBehaviour
         return maxSatiety == 0 ? 0 : currentSatiety / maxSatiety;
     }
 
-    // Выключаем голод (для концовки игры)
     public void DisableHunger()
     {
         satietyDepletionRate = 0;
         currentSatiety = maxSatiety;
         if (tearEffectObject) tearEffectObject.SetActive(false);
         OnSatietyChanged?.Invoke(1f);
+    }
+
+    public float GetCurrentSatiety() => currentSatiety;
+
+    public void LoadSatiety(float value) 
+    { 
+        currentSatiety = value; 
+        
+        // Если мы загрузили игру и у игрока УЖЕ была какая-то сытость (не 100), 
+        // значит он уже играл, и голод можно включить сразу.
+        if (currentSatiety < maxSatiety) canDeplete = true;
+
+        OnSatietyChanged?.Invoke(GetSatietyPercentage());
+        UpdateTearEffect(); 
     }
 }

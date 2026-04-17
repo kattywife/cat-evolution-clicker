@@ -7,7 +7,7 @@ public class ShopManager : MonoBehaviour
 {
     public static ShopManager Instance { get; private set; }
 
-    [Header("Данные и Префиксы")]
+    [Header("Данные")]
     public List<UpgradeData> upgrades;
     public GameObject upgradeButtonPrefab;
     public Transform shopContentParent;
@@ -15,7 +15,7 @@ public class ShopManager : MonoBehaviour
 
     [Header("Настройки анимации")]
     public float animationScrollSpeed = 3f;
-    public float animationBounceAmount = 50f;
+    public float animationBounceAmount = 10f; // Уменьшили отскок
     public int initialItemsToIgnore = 4;
 
     private List<UpgradeButtonUI> shopButtons = new List<UpgradeButtonUI>();
@@ -26,10 +26,7 @@ public class ShopManager : MonoBehaviour
     private void Awake()
     {
         if (Instance == null) Instance = this;
-        else Destroy(gameObject);
-        
-        if (shopContentParent != null)
-            shopContentRectTransform = shopContentParent.GetComponent<RectTransform>();
+        if (shopContentParent != null) shopContentRectTransform = shopContentParent.GetComponent<RectTransform>();
     }
 
     private void Start()
@@ -41,39 +38,23 @@ public class ShopManager : MonoBehaviour
     private void Update()
     {
         if (EconomyManager.Instance == null) return;
-        
         double currentScore = EconomyManager.Instance.score;
         for (int i = 0; i < unlockedItemsCount; i++)
         {
-            if (i < shopButtons.Count && shopButtons[i] != null)
-                shopButtons[i].UpdateInteractableState(currentScore);
+            if (i < shopButtons.Count) shopButtons[i].UpdateInteractableState(currentScore);
         }
     }
 
     private void CreateShop()
     {
-        if (upgradeButtonPrefab == null || shopContentParent == null) {
-            Debug.LogError("[ShopManager] Не назначен префаб кнопки или родитель (Content)!");
-            return;
-        }
-
         foreach (var upgrade in upgrades)
         {
             GameObject newButtonGO = Instantiate(upgradeButtonPrefab, shopContentParent);
             UpgradeButtonUI buttonUI = newButtonGO.GetComponent<UpgradeButtonUI>();
-            
-            // Теперь передаем 'this' (сам ShopManager), чтобы кнопка могла обращаться к нему
             buttonUI.Setup(upgrade, this); 
             shopButtons.Add(buttonUI);
         }
-
-            // Сбрасываем прокрутку в самый верх (1.0f — это верх, 0.0f — низ)
-        if (shopScrollRect != null) 
-        {
-            shopScrollRect.verticalNormalizedPosition = 1f;
-        }
-        
-        Debug.Log($"[ShopManager] Создано товаров: {shopButtons.Count}");
+        // Убрали принудительный сброс, теперь его делает SaveManager через LoadScrollPosition
     }
 
     public void PurchaseUpgrade(UpgradeData upgrade, double cost, UpgradeButtonUI button)
@@ -81,22 +62,16 @@ public class ShopManager : MonoBehaviour
         if (EconomyManager.Instance.SpendScore(cost))
         {
             ApplyUpgradeEffect(upgrade);
-
             int purchasedIndex = shopButtons.IndexOf(button);
             if (purchasedIndex == unlockedItemsCount - 1 && unlockedItemsCount < shopButtons.Count)
             {
                 unlockedItemsCount++;
                 if (unlockedItemsCount - 1 >= initialItemsToIgnore && !isShopAnimating)
-                {
                     StartCoroutine(AnimateScrollToShowItem(shopButtons[unlockedItemsCount - 1].GetComponent<RectTransform>()));
-                }
             }
-
             button.OnPurchaseSuccess();
             UpdateAllShopButtonsState();
-
-            if (TutorialManager.Instance) TutorialManager.Instance.OnUpgradePurchased();
-            if (SaveManager.Instance) SaveManager.Instance.Save();
+            SaveManager.Instance?.Save();
         }
     }
 
@@ -116,10 +91,26 @@ public class ShopManager : MonoBehaviour
     public void UpdateAllShopButtonsState()
     {
         for (int i = 0; i < shopButtons.Count; i++)
+            if (shopButtons[i] != null) shopButtons[i].SetLockedState(i >= unlockedItemsCount);
+    }
+
+    // --- МЕТОДЫ ДЛЯ СОХРАНЕНИЯ ПРОКРУТКИ ---
+
+    public float GetScrollPosition() => shopScrollRect != null ? shopScrollRect.verticalNormalizedPosition : 1f;
+
+    public void LoadScrollPosition(float pos)
+    {
+        if (pos <= 0) pos = 1f; // Если данных нет, начинаем сверху
+        StartCoroutine(ApplyScrollRoutine(pos));
+    }
+
+    private IEnumerator ApplyScrollRoutine(float pos)
+    {
+        yield return new WaitForEndOfFrame(); // Ждем, пока UI построится
+        if (shopScrollRect != null)
         {
-            if (shopButtons[i] == null) continue;
-            bool isUnlocked = (i < unlockedItemsCount);
-            shopButtons[i].SetLockedState(!isUnlocked);
+            Canvas.ForceUpdateCanvases();
+            shopScrollRect.verticalNormalizedPosition = pos;
         }
     }
 
@@ -129,7 +120,8 @@ public class ShopManager : MonoBehaviour
         shopScrollRect.enabled = false;
         Canvas.ForceUpdateCanvases();
         Vector2 startPos = shopContentRectTransform.anchoredPosition;
-        Vector2 targetPos = new Vector2(startPos.x, -targetItem.anchoredPosition.y);
+        float targetY = Mathf.Max(0, -targetItem.anchoredPosition.y - 150f); 
+        Vector2 targetPos = new Vector2(startPos.x, targetY);
         Vector2 overshoot = targetPos + new Vector2(0, animationBounceAmount);
         float t = 0;
         while (t < 1f) { t += Time.deltaTime * animationScrollSpeed; shopContentRectTransform.anchoredPosition = Vector2.Lerp(startPos, overshoot, t); yield return null; }
