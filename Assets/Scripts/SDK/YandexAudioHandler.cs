@@ -2,21 +2,31 @@ using UnityEngine;
 
 public class YandexAudioHandler : MonoBehaviour
 {
-    // Вызывается, когда вкладка теряет/получает фокус
+    private void Awake()
+    {
+        DontDestroyOnLoad(gameObject);
+    }
+
     void OnApplicationFocus(bool hasFocus)
     {
-        Silence(!hasFocus);
+        SetPause(!hasFocus);
     }
 
-    // Вызывается при паузе (сворачивании на мобилках)
     void OnApplicationPause(bool isPaused)
     {
-        Silence(isPaused);
+        SetPause(isPaused);
     }
 
-    void Silence(bool silence)
+   void SetPause(bool doPause)
     {
-        // 0 - полная тишина, 1 - обычная громкость
-        AudioListener.volume = silence ? 0f : 1f;
+        // Если сейчас идет реклама, мы вообще не реагируем на потерю/получение фокуса!
+        // Реклама сама управляет временем и звуком.
+        if (YandexManager.Instance != null && YandexManager.Instance.isAdPlaying)
+        {
+            return; 
+        }
+
+        AudioListener.volume = doPause ? 0f : 1f;
+        Time.timeScale = doPause ? 0f : 1f;
     }
 }

@@ -24,7 +24,7 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
 
     private UpgradeData currentUpgradeData;
     private int currentLevel = 0;
-    private double currentCost = 0;
+    public double currentCost = 0;
     
     // Сменили GameManager на ShopManager
     private ShopManager shopManager; 
@@ -186,6 +186,11 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
         if (number < 1_000_000_000) return (number / 1_000_000).ToString("F1") + "М";
         return (number / 1_000_000_000).ToString("F1") + "Б";
     }
-
+    
+    public void LoadCost(double savedCost)
+    {
+        currentCost = savedCost;
+        UpdateTextAndIcons(); // Сразу обновляем текст цены на кнопке
+    }
     #endregion
 }

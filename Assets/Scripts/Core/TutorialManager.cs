@@ -146,11 +146,12 @@ public class TutorialManager : MonoBehaviour
 
     public void OnUpgradePurchased()
     {
-        if (step3Shown && !step3Done)
+        if (!step3Done)
         {
             Debug.Log("<color=green>[Tutorial]</color> Шаг 3 выполнен (Апгрейд куплен).");
             if (tooltipBuyUpgrade) tooltipBuyUpgrade.Hide();
             step3Done = true;
+            step3Shown = true;
         }
     }
 

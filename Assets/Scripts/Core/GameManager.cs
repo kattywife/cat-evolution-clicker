@@ -34,6 +34,12 @@ public class GameManager : MonoBehaviour
     public GameObject exitButton;
     public GameObject restartButton;
 
+    [Header("Эффекты старта")]
+    public AudioSource startMeowSource; // Ссылка на AudioSource с мяуканьем
+    public GameObject startLevelEffect; // Ссылка на эффект начала уровня (частицы или анимация)
+    public AudioClip levelUpSound; 
+
+
     private enum AdRewardType { None, SuperFood, DoubleScore }
     private AdRewardType pendingAdReward = AdRewardType.None;
 
@@ -58,7 +64,7 @@ public class GameManager : MonoBehaviour
         this.enabled = false; 
         if (CutsceneManager.Instance != null)
         {
-            StartCoroutine(CutsceneManager.Instance.PlayLoadingSequence("loading.mp4"));
+            StartCoroutine(CutsceneManager.Instance.PlayLoadingSequence("loading.webm"));
         }
         else
         {
@@ -203,7 +209,7 @@ public class GameManager : MonoBehaviour
 
         // 4. Просим CutsceneManager начать подготовку финала
         if (CutsceneManager.Instance != null)
-            CutsceneManager.Instance.StartEndingSequence("ending.mp4");
+            CutsceneManager.Instance.StartEndingSequence("ending.webm");
     }
 
     private void SetupPlatformButtons()
@@ -234,14 +240,39 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame() 
     {
-        Debug.Log("<color=yellow>[GameManager]</color> Перезапуск...");
+        Debug.Log("<color=yellow>[GameManager]</color> Полный сброс прогресса...");
         
-        // Сбрасываем время на случай пауз
+        // Сбрасываем время (важно, если нажали рестарт во время паузы!)
         Time.timeScale = 1f;
+        AudioListener.pause = false;
 
-        // Вместо просто LoadScene, лучше использовать индекс текущей сцены
-        int sceneIndex = SceneManager.GetActiveScene().buildIndex;
-        SceneManager.LoadScene(sceneIndex);
+        // 1. СОЗДАЕМ ЧИСТОЕ СОХРАНЕНИЕ
+        GameData resetData = new GameData();
+        resetData.score = 0;
+        resetData.levelIndex = 0;
+        resetData.introWatched = true; // Чтобы не смотреть интро опять, но можно поставить false
+        resetData.unlockedItemsCount = 1;
+        resetData.shopScrollPosition = 1f;
+        resetData.currentSatiety = 100f;
+
+        resetData.scorePerClick = 1;
+        resetData.scorePerSecond = 0;
+        resetData.clickMultiplier = 1;
+        resetData.passiveMultiplier = 1;
+
+        // ЭТО ОБНУЛИТ ЦЕНЫ:
+        resetData.shopItemCosts = null; // Магазин увидит null и возьмет базовые цены из UpgradeData
+        resetData.foodCost = 10;        // Твоя самая первая цена корма
+
+        // 2. ОТПРАВЛЯЕМ В ЯНДЕКС
+        if (YandexManager.Instance != null)
+        {
+            string json = JsonUtility.ToJson(resetData);
+            YandexManager.Instance.SaveData(json);
+        }
+
+        // 3. ПЕРЕЗАГРУЖАЕМ СЦЕНУ
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
     public void ExitGame() => Application.Quit();
@@ -251,5 +282,67 @@ public class GameManager : MonoBehaviour
         if (YandexManager.Instance != null) YandexManager.Instance.OnRewardGranted -= OnAdRewarded;
     }
 
+
+    public void PlayStartEffects()
+    {
+
+        if (ProgressionManager.Instance.currentLevelIndex == 0)
+        {
+            // 1. Включаем звук мяуканья
+            if (startMeowSource != null)
+            {
+                startMeowSource.Play();
+            }
+
+            // 2. Включаем визуальный эффект
+            if (startLevelEffect != null)
+            {
+                startLevelEffect.SetActive(true);
+                
+                // Если это частицы (Particle System), на всякий случай принудительно запустим
+                ParticleSystem ps = startLevelEffect.GetComponent<ParticleSystem>();
+                if (ps != null) ps.Play();
+            }
+
+            if (levelUpSound != null)
+            {
+                AudioManager.Instance.PlaySound(levelUpSound);
+            }
+        }
+        
+    }
+
+    [HideInInspector] public bool isGamePaused = false;
+
+    public void TogglePause()
+    {
+        isGamePaused = !isGamePaused;
+
+        if (isGamePaused)
+        {
+            Debug.Log("<color=yellow>[GameManager]</color> Игра на паузе");
+            Time.timeScale = 0f;           // Останавливаем время (голод, пассивный доход)
+            AudioListener.pause = true;    // Останавливаем все звуки
+        }
+        else
+        {
+            Debug.Log("<color=green>[GameManager]</color> Игра снята с паузы");
+            Time.timeScale = 1f;           // Возвращаем время
+            AudioListener.pause = false;   // Возвращаем звуки
+        }
+    }
+
     #endregion
+
+    // --- НОВЫЕ МЕТОДЫ ДЛЯ СОХРАНЕНИЯ КУЛДАУНА ---
+    public float GetDoubleScoreTimer()
+    {
+        return currentDoubleScoreTimer;
+    }
+
+    public void LoadDoubleScoreTimer(float savedTimerValue)
+    {
+        // Загружаем сохраненный таймер. Если он больше нуля — кнопка х2 автоматически скроется
+        currentDoubleScoreTimer = savedTimerValue;
+    }
 }

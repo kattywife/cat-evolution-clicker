@@ -30,6 +30,7 @@ public class CutsceneManager : MonoBehaviour
     [Header("Интро")]
     public VideoPlayer introVideoPlayer;
     public float introFadeDuration = 1.5f;
+    private Coroutine introCoroutine;
 
     [Header("Концовка")]
     public float endingDelay = 3.0f;
@@ -39,6 +40,24 @@ public class CutsceneManager : MonoBehaviour
     public AudioClip endingMusic;
 
     private bool isWatchingEnding = false;
+
+    private bool endingPreloaded = false;
+
+    // Этот метод мы вызовем на 7 уровне
+    public void PreloadEndingVideo(string fileName)
+    {
+        if (endingPreloaded || endingVideoPlayer == null) return;
+
+        Debug.Log("<color=magenta>[CutsceneManager]</color> Начинаю фоновую предзагрузку финала...");
+        
+        string videoPath = Path.Combine(Application.streamingAssetsPath, fileName);
+        endingVideoPlayer.source = VideoSource.Url;
+        endingVideoPlayer.url = videoPath;
+        
+        // Подготавливаем, но НЕ играем
+        endingVideoPlayer.Prepare(); 
+        endingPreloaded = true;
+    }
 
     private void Awake()
     {
@@ -64,9 +83,9 @@ public class CutsceneManager : MonoBehaviour
     {
         Debug.Log("<color=cyan>[CutsceneManager]</color> Старт логики.");
         if (enableLoadingScreen && loadingPanel)
-            StartCoroutine(PlayLoadingSequence("loading.mp4"));
+            StartCoroutine(PlayLoadingSequence("loading.webm"));
         else if (enableIntro && !hasWatchedIntro && introPanel)
-            StartCoroutine(StartIntroSequence("intro.mp4"));
+            introCoroutine = StartCoroutine(StartIntroSequence("intro.webm"));
         else
             StartCoroutine(FinishSequences());
     }
@@ -83,48 +102,55 @@ public class CutsceneManager : MonoBehaviour
 
     public IEnumerator PlayLoadingSequence(string videoName)
     {
-        Debug.Log("<color=white>[CutsceneManager]</color> Шаг 1: Экран загрузки.");
+        Debug.Log("<color=white>[CutsceneManager]</color> Шаг 1: Инициализация данных Яндекса.");
+        
+        // Включаем панель загрузки
         loadingPanel.SetActive(true);
         
-        // В начале загрузки: полоска включена, кнопка выключена
-        if (loadingProgressBarObject) loadingProgressBarObject.SetActive(true);
+        if (loadingProgressBarObject) loadingProgressBarObject.SetActive(false); 
         if (loadingStartButton) loadingStartButton.SetActive(false);
         
         isStartButtonClicked = false;
 
+        // --- ВОЗВРАЩАЕМ ВИДЕО В UNITY ---
+        // Это запустит воспроизведение котика внутри игры, убирая черный квадрат
         if (loadingCatVideoPlayer)
         {
             yield return StartCoroutine(PrepareVideoSafe(loadingCatVideoPlayer, videoName));
             if (loadingCatVideoPlayer.isPrepared) loadingCatVideoPlayer.Play();
         }
 
-        float timer = 0f;
-        while (timer < loadingDuration)
+        // Ждем готовности Яндекс SDK
+        if (YandexManager.Instance)
         {
-            timer += Time.deltaTime;
-            if (loadingFillImage) loadingFillImage.fillAmount = timer / loadingDuration;
-            yield return null;
+            yield return new WaitUntil(() => YandexManager.Instance.isSdkReady);
         }
-        
-        // --- ВОТ ИЗМЕНЕНИЕ ТУТ ---
-        // 1. Прячем полоску прогресса
-        if (loadingProgressBarObject) loadingProgressBarObject.SetActive(false);
-        
-        // 2. Показываем кнопку Старт
+
+        // Ждем, пока SaveManager загрузит данные игрока из облака Яндекса
+        if (SaveManager.Instance)
+        {
+            yield return new WaitUntil(() => SaveManager.Instance.isDataLoaded);
+        }
+
+        // Как только всё готово — сообщаем Яндексу, что игра полностью готова к показу
+        if (YandexManager.Instance) 
+        {
+            YandexManager.Instance.ReportGameReady();
+        }
+
+        // Показываем кнопку «СТАРТ»
         if (loadingStartButton) loadingStartButton.SetActive(true);
 
-        if (YandexManager.Instance) YandexManager.Instance.ReportGameReady();
-
-        // Ждем клика
+        // Ждем клика по кнопке Старт от игрока
         yield return new WaitUntil(() => isStartButtonClicked);
 
-        // Дальше логика интро или игры...
+        // Переходим к интро или геймплею
         if (enableIntro && !hasWatchedIntro && introPanel)
         {
             yield return StartCoroutine(FadeWhite(true, 0.5f));
             loadingPanel.SetActive(false);
             if (loadingCatVideoPlayer) loadingCatVideoPlayer.Stop();
-            StartCoroutine(StartIntroSequence("intro.mp4"));
+            introCoroutine = StartCoroutine(StartIntroSequence("intro.webm"));
         }
         else
         {
@@ -164,6 +190,31 @@ public class CutsceneManager : MonoBehaviour
         StartCoroutine(FinishSequences());
     }
 
+    public void SkipIntro()
+    {
+        // Если интро сейчас не идет, ничего не делаем
+        if (introCoroutine == null) return;
+
+        Debug.Log("<color=yellow>[CutsceneManager]</color> Игрок пропустил интро.");
+
+        // 1. Останавливаем корутину ожидания видео
+        StopCoroutine(introCoroutine);
+        introCoroutine = null;
+
+        // 2. Останавливаем сам плеер
+        if (introVideoPlayer) 
+            introVideoPlayer.Stop();
+
+        // 3. Записываем, что интро просмотрено, и сохраняем игру
+        hasWatchedIntro = true;
+        if (SaveManager.Instance) 
+            SaveManager.Instance.Save();
+
+        // 4. Скрываем панель интро и запускаем игру
+        introPanel.SetActive(false);
+        StartCoroutine(FinishSequences());
+    }
+
     #endregion
 
     #region --- ЗАВЕРШЕНИЕ И ГЕЙМПЛЕЙ ---
@@ -174,11 +225,17 @@ public class CutsceneManager : MonoBehaviour
 
         if (GameManager.Instance)
         {
-            // Включаем панель игры ДО того, как уберем белый экран
+            // 1. Сначала включаем панель игры. 
+            // Все звуки/эффекты ТЕПЕРЬ МОЛЧАТ, потому что мы сняли Play On Awake.
             GameManager.Instance.mainGamePanel.SetActive(true);
             
+            // 2. Плавно убираем белый экран (белый становится прозрачным)
             yield return StartCoroutine(FadeWhite(false, 1.0f));
             
+            // 3. ВОТ ТЕПЕРЬ, когда экран прозрачный, запускаем мяуканье и эффекты!
+            GameManager.Instance.PlayStartEffects();
+
+            // 4. Включаем остальную логику игры
             GameManager.Instance.enabled = true;
 
             if (ProgressionManager.Instance) 
@@ -215,12 +272,11 @@ public class CutsceneManager : MonoBehaviour
 
         if (endingVideoPlayer)
         {
-            // Убеждаемся, что сам компонент и объект плеера активны
-            endingVideoPlayer.gameObject.SetActive(true); 
-            endingVideoPlayer.isLooping = false;
-
-            // Теперь Prepare сработает мгновенно, так как объект активен
-            yield return StartCoroutine(PrepareVideoSafe(endingVideoPlayer, videoName));
+            // Если видео еще не готово (например, игрок ОЧЕНЬ быстро прошел с 8 по 10 уровень)
+            if (!endingVideoPlayer.isPrepared)
+            {
+                yield return StartCoroutine(PrepareVideoSafe(endingVideoPlayer, videoName));
+            }
         }
 
         // 3. Видео готово! Делаем мгновенную подмену
@@ -296,7 +352,7 @@ public class CutsceneManager : MonoBehaviour
         if (!fadeIn) whiteFadePanel.SetActive(false);
     }
 
-    private IEnumerator PrepareVideoSafe(VideoPlayer vp, string fileName)
+    /* private IEnumerator PrepareVideoSafe(VideoPlayer vp, string fileName)
     {
         string videoPath = Path.Combine(Application.streamingAssetsPath, fileName);
         vp.source = VideoSource.Url;
@@ -309,6 +365,28 @@ public class CutsceneManager : MonoBehaviour
             timeout -= Time.deltaTime;
             yield return null;
         }
+    } */
+
+    private IEnumerator PrepareVideoSafe(VideoPlayer vp, string fileName)
+    {
+        string videoPath = Path.Combine(Application.streamingAssetsPath, fileName);
+        vp.source = VideoSource.Url;
+        vp.url = videoPath;
+        
+        // Вместо долгого ожидания Prepare, мы просто даем команду Play.
+        // В WebGL VideoPlayer сам начнет буферизацию.
+        vp.Prepare();
+
+        float timeout = 10.0f; // Уменьшим таймаут
+        while (!vp.isPrepared && timeout > 0)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+        
+        // Если за 10 секунд не подготовилось (плохой интернет), 
+        // всё равно пробуем играть, иначе игрок зависнет на черном экране.
+        if (!vp.isPrepared) Debug.LogWarning("Video prep timed out, trying to play anyway...");
     }
 
     #endregion

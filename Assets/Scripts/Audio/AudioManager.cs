@@ -1,14 +1,14 @@
 using UnityEngine;
+using System;
 
 public class AudioManager : MonoBehaviour
 {
     public static AudioManager Instance;
 
-    [Header("Источники звука")]
-    [Tooltip("Источник звука для одиночных эффектов (UI, клики и т.д.)")]
-    public AudioSource sfxSource;
+    public event Action<bool> OnMuteChanged; // Событие для мгновенной синхронизации
 
-    [Tooltip("Источник звука для фоновой музыки")]
+    [Header("Источники звука")]
+    public AudioSource sfxSource;
     public AudioSource musicSource;
 
     private bool isMuted = false;
@@ -20,9 +20,7 @@ public class AudioManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(transform.root.gameObject);
-            // Загружаем состояние (1 = выключено, 0 = включено)
             isMuted = PlayerPrefs.GetInt(MutePrefKey, 0) == 1;
-            ApplyMuteState();
         }
         else
         {
@@ -30,29 +28,29 @@ public class AudioManager : MonoBehaviour
         }
     }
 
+    private void Start()
+    {
+        ApplyMuteState(); // Применяем состояние при старте
+    }
+
     public void PlaySound(AudioClip clip, float volume = 1.0f)
     {
-        if (clip != null && sfxSource != null)
+        if (clip != null && sfxSource != null && !isMuted)
         {
-            // PlayOneShot играет, даже если source.loop = false
             sfxSource.PlayOneShot(clip, volume);
         }
     }
 
     public void PlayMusic(AudioClip musicClip)
     {
-        if (musicClip != null && musicSource != null)
-        {
-            if (musicSource.clip == musicClip && musicSource.isPlaying)
-            {
-                return;
-            }
+        if (musicClip == null || musicSource == null) return;
+        if (musicSource.clip == musicClip && musicSource.isPlaying) return;
 
-            musicSource.Stop();
-            musicSource.clip = musicClip;
-            musicSource.loop = true;
-            musicSource.Play();
-        }
+        musicSource.Stop();
+        musicSource.clip = musicClip;
+        musicSource.loop = true;
+        musicSource.mute = isMuted; // Ставим актуальный статус сразу
+        musicSource.Play();
     }
 
     public void ToggleMute()
@@ -62,27 +60,16 @@ public class AudioManager : MonoBehaviour
 
         PlayerPrefs.SetInt(MutePrefKey, isMuted ? 1 : 0);
         PlayerPrefs.Save();
+
+        // Оповещаем всех слушателей (например, AudioMuteSync)
+        OnMuteChanged?.Invoke(isMuted);
     }
 
     private void ApplyMuteState()
     {
-        // ВАЖНОЕ ИЗМЕНЕНИЕ:
-        // Мы больше не трогаем AudioListener.volume (это выключило бы всё).
-        // Мы выключаем только конкретные источники звука ИГРЫ.
-
-        if (sfxSource != null)
-        {
-            sfxSource.mute = isMuted;
-        }
-
-        if (musicSource != null)
-        {
-            musicSource.mute = isMuted;
-        }
+        if (sfxSource != null) sfxSource.mute = isMuted;
+        if (musicSource != null) musicSource.mute = isMuted;
     }
 
-    public bool IsMuted()
-    {
-        return isMuted;
-    }
+    public bool IsMuted() => isMuted;
 }

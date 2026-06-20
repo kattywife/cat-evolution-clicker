@@ -8,6 +8,14 @@ mergeInto(LibraryManager.library, {
     }
   },
 
+  // --- Проверка, загрузился ли SDK ---
+  CheckYandexSDKReady: function () {
+    if (typeof ysdk !== 'undefined' && ysdk !== null) {
+        return true;
+    }
+    return false;
+  },
+
   // --- Автоопределение языка (Пункт 2.14) ---
   GetLang: function () {
     if (typeof ysdk !== 'undefined' && ysdk !== null) {

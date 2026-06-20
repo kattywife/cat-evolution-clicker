@@ -19,7 +19,10 @@ public class SatietyManager : MonoBehaviour
 
     public event Action<float> OnSatietyChanged;
 
-    private void Awake() => Instance = this;
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     private void Start()
     {
@@ -28,20 +31,24 @@ public class SatietyManager : MonoBehaviour
     }
 
     private void Update()
+{
+    // --- НОВОЕ: Ждем, пока закончится экран загрузки и интро ---
+    // (CutsceneManager включает GameManager только когда начинается геймплей)
+    if (GameManager.Instance == null || !GameManager.Instance.enabled) return;
+
+    // Если голод не активирован ИЛИ мы в финале — выходим
+    if (!canDeplete || satietyDepletionRate <= 0) return;
+
+    if (currentSatiety > 0)
     {
-        // --- ПРАВКА: Если голод не активирован ИЛИ мы в финале — выходим ---
-        if (!canDeplete || satietyDepletionRate <= 0) return;
-
-        if (currentSatiety > 0)
-        {
-            currentSatiety -= satietyDepletionRate * Time.deltaTime;
-            if (currentSatiety < 0) currentSatiety = 0;
-            
-            OnSatietyChanged?.Invoke(GetSatietyPercentage());
-        }
-
-        UpdateTearEffect();
+        currentSatiety -= satietyDepletionRate * Time.deltaTime;
+        if (currentSatiety < 0) currentSatiety = 0;
+        
+        OnSatietyChanged?.Invoke(GetSatietyPercentage());
     }
+
+    UpdateTearEffect();
+}
 
     // --- НОВОЕ: Метод, который вызывает GameManager при первом клике ---
     public void StartHunger()
@@ -101,11 +108,16 @@ public class SatietyManager : MonoBehaviour
     { 
         currentSatiety = value; 
         
-        // Если мы загрузили игру и у игрока УЖЕ была какая-то сытость (не 100), 
-        // значит он уже играл, и голод можно включить сразу.
-        if (currentSatiety < maxSatiety) canDeplete = true;
+        // Защита от микропогрешностей. Проверяем не ровно 100, а хотя бы < 99.5
+        // Это спасет, если в Яндекс сохранилось 99.999 вместо 100
+        if (currentSatiety < maxSatiety - 0.5f) 
+        {
+            canDeplete = true;
+        }
 
         OnSatietyChanged?.Invoke(GetSatietyPercentage());
         UpdateTearEffect(); 
     }
+
+    
 }

@@ -1,22 +1,24 @@
 using UnityEngine;
 using System.Runtime.InteropServices;
 using System;
+using System.Collections; 
 
 public class YandexManager : MonoBehaviour
 {
     public static YandexManager Instance;
+    public bool isAdPlaying = false;
+    public bool isSdkReady = false; 
 
-    // --- ИМПОРТ ФУНКЦИЙ ИЗ JSLIB ---
     [DllImport("__Internal")] private static extern void GameReady();
     [DllImport("__Internal")] private static extern void ShowYandexRewardAd();
     [DllImport("__Internal")] private static extern void ShowYandexInterstitialAd();
     [DllImport("__Internal")] private static extern void SaveToYandex(string data);
     [DllImport("__Internal")] private static extern void LoadFromYandex();
-    [DllImport("__Internal")] private static extern string GetLang(); // Новое: для пункта 2.14
+    [DllImport("__Internal")] private static extern string GetLang();
+    [DllImport("__Internal")] private static extern bool CheckYandexSDKReady();
 
-    // --- СОБЫТИЯ ---
-    public Action OnRewardGranted;      // Игрок досмотрел видео
-    public Action<string> OnDataLoaded; // Пришли данные из облака
+    public Action OnRewardGranted;      
+    public Action<string> OnDataLoaded; 
 
     private void Awake()
     {
@@ -31,20 +33,36 @@ public class YandexManager : MonoBehaviour
         }
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
-        // Сразу при старте делаем запрос языка, чтобы выполнить требование 2.14
+#if UNITY_WEBGL && !UNITY_EDITOR
+        Debug.Log("[YandexManager] Ожидание инициализации Yandex SDK...");
+        
+        float timeout = 7.0f; // Таймаут 7 секунд для защиты от AdBlock
+        while (!CheckYandexSDKReady() && timeout > 0)
+        {
+            timeout -= Time.deltaTime;
+            yield return null;
+        }
+
+        if (timeout <= 0)
+        {
+            Debug.LogWarning("[YandexManager] Превышено время ожидания SDK. Возможно, включен AdBlock. Запуск в оффлайн-режиме.");
+        }
+#else
+        yield return null; 
+#endif
+
+        isSdkReady = true; // В любом случае разблокируем игру
+        Debug.Log("<color=green>[YandexManager] Статус готовности SDK установлен.</color>");
+
         RequestLanguage();
     }
-
-    // =========================================================
-    // ПУБЛИЧНЫЕ МЕТОДЫ
-    // =========================================================
 
     public void ReportGameReady()
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        GameReady();
+        if (isSdkReady) GameReady();
 #else
         Debug.Log("[YandexManager] Game Ready Sent (Editor)");
 #endif
@@ -54,9 +72,10 @@ public class YandexManager : MonoBehaviour
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
         try {
-            string lang = GetLang();
-            Debug.Log("[YandexManager] Detected Language: " + lang);
-            // Даже если мы ничего не меняем в UI, вызов метода зафиксирован в логах SDK
+            if (isSdkReady) {
+                string lang = GetLang();
+                Debug.Log("[YandexManager] Detected Language: " + lang);
+            }
         } catch (Exception e) {
             Debug.LogError("[YandexManager] Language Request Error: " + e.Message);
         }
@@ -68,7 +87,7 @@ public class YandexManager : MonoBehaviour
     public void ShowRewardAd()
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        ShowYandexRewardAd();
+        if (isSdkReady) ShowYandexRewardAd();
 #else
         Debug.Log("[YandexManager] Show Reward Ad -> Fake Reward Granted");
         OnRewardedAdReward(); 
@@ -78,7 +97,7 @@ public class YandexManager : MonoBehaviour
     public void ShowInterstitialAd()
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        ShowYandexInterstitialAd();
+        if (isSdkReady) ShowYandexInterstitialAd();
 #else
         Debug.Log("[YandexManager] Show Interstitial Ad");
 #endif
@@ -87,7 +106,7 @@ public class YandexManager : MonoBehaviour
     public void SaveData(string json)
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        SaveToYandex(json);
+        if (isSdkReady) SaveToYandex(json);
 #else
         Debug.Log("[YandexManager] Save Data To Cloud: " + json);
 #endif
@@ -96,36 +115,32 @@ public class YandexManager : MonoBehaviour
     public void LoadData()
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-        LoadFromYandex();
+        if (isSdkReady) LoadFromYandex();
+        else OnLoadDataReceived("{}"); // Если SDK не готов, сразу отдаем пустой объект
 #else
         Debug.Log("[YandexManager] Load Data Requested (Fake Empty)");
         OnLoadDataReceived("{}");
 #endif
     }
 
-    // =========================================================
-    // CALLBACKS ИЗ JAVASCRIPT (Вызываются через SendMessage)
-    // =========================================================
-
     public void OnAdOpen()
     {
-        Debug.Log("[YandexManager] Ad Opened -> Muting Game");
+        isAdPlaying = true;
         Time.timeScale = 0f;
-        AudioListener.pause = true; // Ставим на паузу все аудио источники
+        AudioListener.pause = true; 
         AudioListener.volume = 0f;
     }
 
     public void OnAdClose()
     {
-        Debug.Log("[YandexManager] Ad Closed -> Resuming Game");
+        isAdPlaying = false;
         Time.timeScale = 1f;
-        AudioListener.pause = false; // Снимаем с паузы
+        AudioListener.pause = false; 
         AudioListener.volume = 1f;
     }
 
     public void OnRewardedAdReward()
     {
-        Debug.Log("[YandexManager] Reward Granted!");
         OnRewardGranted?.Invoke();
     }
 

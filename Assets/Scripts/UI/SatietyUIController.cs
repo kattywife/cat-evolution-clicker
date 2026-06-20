@@ -7,6 +7,9 @@ using System.Collections;
 
 public class SatietyUIController : MonoBehaviour
 {
+
+    public static SatietyUIController Instance { get; private set; }
+
     // --- ССЫЛКИ НА КОМПОНЕНТЫ ---
     [Header("Основные ссылки из сцены")]
     public GameManager gameManager;
@@ -229,6 +232,8 @@ public class SatietyUIController : MonoBehaviour
                 SatietyManager.Instance.Feed(feedAmount); // Если очки списались, кормим кота
             }
             feedCost *= costIncreaseMultiplier;
+            SaveManager.Instance.Save();
+
         }
     }
 
@@ -247,5 +252,16 @@ public class SatietyUIController : MonoBehaviour
         if (number < 1000) return number.ToString("F0");
         if (number < 1000000) return (number / 1000).ToString("F1") + "K";
         return (number / 1000000).ToString("F1") + "M";
+    }
+
+    public double GetFoodCost() => feedCost;
+
+    public void LoadFoodCost(double savedCost)
+    {
+        if (savedCost > 0)
+        {
+            feedCost = savedCost;
+            if (feedCostText != null) feedCostText.text = FormatNumber(feedCost);
+        }
     }
 }

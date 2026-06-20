@@ -72,6 +72,9 @@ public class ShopManager : MonoBehaviour
             button.OnPurchaseSuccess();
             UpdateAllShopButtonsState();
             SaveManager.Instance?.Save();
+
+            TutorialManager.Instance.OnUpgradePurchased();
+
         }
     }
 
@@ -120,7 +123,8 @@ public class ShopManager : MonoBehaviour
         shopScrollRect.enabled = false;
         Canvas.ForceUpdateCanvases();
         Vector2 startPos = shopContentRectTransform.anchoredPosition;
-        float targetY = Mathf.Max(0, -targetItem.anchoredPosition.y - 150f); 
+        float viewportHeight = shopScrollRect.viewport.rect.height;
+        float targetY = Mathf.Max(0, -targetItem.anchoredPosition.y - (viewportHeight / 2f));
         Vector2 targetPos = new Vector2(startPos.x, targetY);
         Vector2 overshoot = targetPos + new Vector2(0, animationBounceAmount);
         float t = 0;
@@ -134,4 +138,30 @@ public class ShopManager : MonoBehaviour
 
     public int GetUnlockedCount() => unlockedItemsCount;
     public void LoadUnlockedCount(int count) { unlockedItemsCount = count; UpdateAllShopButtonsState(); }
+
+    // --- СОХРАНЕНИЕ И ЗАГРУЗКА ЦЕН МАГАЗИНА ---
+
+    public double[] GetShopItemCosts()
+    {
+        double[] costs = new double[shopButtons.Count];
+        for (int i = 0; i < shopButtons.Count; i++)
+        {
+            costs[i] = shopButtons[i].currentCost; // Берем цену с каждой кнопки
+        }
+        return costs;
+    }
+
+    public void LoadShopItemCosts(double[] costs)
+    {
+        if (costs == null || costs.Length == 0) return;
+
+        for (int i = 0; i < shopButtons.Count; i++)
+        {
+            // Если для этой кнопки есть сохраненная цена (и она больше нуля)
+            if (i < costs.Length && costs[i] > 0)
+            {
+                shopButtons[i].LoadCost(costs[i]); 
+            }
+        }
+    }
 }

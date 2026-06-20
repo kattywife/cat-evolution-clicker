@@ -50,6 +50,7 @@ public class EconomyManager : MonoBehaviour
         return scorePerClick * clickMultiplier;
     }
 
+
     public double GetBasePassiveValue()
     {
         return scorePerSecond * passiveMultiplier;

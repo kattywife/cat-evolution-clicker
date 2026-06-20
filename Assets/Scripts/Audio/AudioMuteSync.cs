@@ -6,18 +6,33 @@ public class AudioMuteSync : MonoBehaviour
 
     void Start()
     {
-        // Находим звук на этом объекте
         myAudioSource = GetComponent<AudioSource>();
+
+        if (AudioManager.Instance != null)
+        {
+            // Подписываемся на событие изменения звука
+            AudioManager.Instance.OnMuteChanged += HandleMuteChanged;
+            
+            // Устанавливаем текущее состояние сразу
+            myAudioSource.mute = AudioManager.Instance.IsMuted();
+        }
     }
 
-    void Update()
+    // Этот метод вызывается ТОЛЬКО когда нажали кнопку Mute
+    private void HandleMuteChanged(bool muted)
     {
-        // Если у нас есть связь с главным менеджером звука
-        if (myAudioSource != null && AudioManager.Instance != null)
+        if (myAudioSource != null)
         {
-            // Копируем настройку "Mute" оттуда
-            // Если в главном меню звук выключен (IsMuted = true), то и мы выключаемся
-            myAudioSource.mute = AudioManager.Instance.IsMuted();
+            myAudioSource.mute = muted;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        // Отписываемся, чтобы не было ошибок при удалении объекта
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.OnMuteChanged -= HandleMuteChanged;
         }
     }
 }

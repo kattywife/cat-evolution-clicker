@@ -9,7 +9,7 @@ public class ProgressionManager : MonoBehaviour
 
     [Header("Данные уровней")]
     public List<LevelData> levels;
-    private int currentLevelIndex = 0;
+    public int currentLevelIndex = 0;
 
     [Header("UI Ссылки")]
     public Image catImage;
@@ -35,6 +35,16 @@ public class ProgressionManager : MonoBehaviour
     // Проверка, пора ли повысить уровень
     public void CheckForLevelUp(double currentScore)
     {
+
+        // Внутри метода, где уровень повышается:
+        if (currentLevelIndex == 5)
+        {
+            if (CutsceneManager.Instance != null)
+            {
+                CutsceneManager.Instance.PreloadEndingVideo("ending.webm"); // используй .webm если переименовала
+            }
+        }
+
         if (currentLevelIndex + 1 < levels.Count)
         {
             if (currentScore >= levels[currentLevelIndex + 1].scoreToReach)
