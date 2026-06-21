@@ -1,0 +1,257 @@
+{
+  "items": [
+    {
+      "key": "play_btn",
+      "ru": "Играть!",
+      "en": "Play!",
+      "tr": "Oyna!"
+    },
+    {
+      "key": "skip_btn",
+      "ru": "Пропустить",
+      "en": "Skip",
+      "tr": "Atla"
+    },
+    {
+      "key": "intro_story_1",
+      "ru": "...И спустился с неба космический кот...",
+      "en": "...And a space cat descended from the heavens...",
+      "tr": "...Ve gökten kozmik bir kedi indi..."
+    },
+    {
+      "key": "ui_level",
+      "ru": "Уровень",
+      "en": "Level",
+      "tr": "Seviye"
+    },
+    {
+      "key": "ui_max_level",
+      "ru": "МАКСИМУМ",
+      "en": "MAXIMUM",
+      "tr": "MAKSİMUM"
+    },
+    {
+      "key": "ui_feed_btn",
+      "ru": "Покормить",
+      "en": "Feed",
+      "tr": "Besle"
+    },
+    {
+      "key": "ui_superfeed_btn",
+      "ru": "Суперкорм",
+      "en": "Superfeed",
+      "tr": "Süper mama"
+    },
+    {
+      "key": "tut_buy_upgrade_title",
+      "ru": "Поиграйте с котенком!",
+      "en": "Play with the kitten!",
+      "tr": "Yavru kediyle oynayın!"
+    },
+    {
+      "key": "tut_buy_upgrade_desc",
+      "ru": "Покупайте улучшения за монетки и увеличивайте свой доход.",
+      "en": "Buy upgrades with coins and increase your income.",
+      "tr": "Paralarla yükseltmeler satın alın ve gelirinizi artırın."
+    },
+    {
+      "key": "tut_feed_cat_title",
+      "ru": "Котик голодный :(",
+      "en": "The kitten is hungry :(",
+      "tr": "Yavru kedi aç :("
+    },
+    {
+      "key": "tut_feed_cat_desc",
+      "ru": "Покормите питомца и восстановите пассивный доход",
+      "en": "Feed your pet to restore passive income",
+      "tr": "Pasif geliri geri kazanmak için evcil hayvanınızı besleyin"
+    },
+    {
+      "key": "tut_click_cat_title",
+      "ru": "Погладьте котенка!",
+      "en": "Pet the kitten!",
+      "tr": "Yavru kediyi sevin!"
+    },
+    {
+      "key": "tut_click_cat_desc",
+      "ru": "Тапайте по котенку и растите его большим-пребольшим!",
+      "en": "Tap on the kitten and grow it big and strong!",
+      "tr": "Yavru kediye dokunun ve onu kocaman büyütün!"
+    },
+    {
+      "key": "tut_earn_money_title",
+      "ru": "Зарабатывайте!",
+      "en": "Earn money!",
+      "tr": "Para kazanın!"
+    },
+    {
+      "key": "tut_earn_money_desc",
+      "ru": "Получайте монетки за тапы",
+      "en": "Get coins for taps",
+      "tr": "Dokunarak jeton kazanın"
+    },
+
+    {
+      "key": "ending_story_1",
+      "ru": "Теперь он не боится сверхновых и ловко охотится на астероиды!",
+      "en": "Now he doesn't fear supernovas and deftly hunts asteroids!",
+      "tr": "Artık süpernovalardan korkmuyor ve asteroitleri ustaca avlıyor!"
+    },
+    {
+      "key": "ending_story_2",
+      "ru": "Когда-нибудь он вернется с маленьким космическим котенком...",
+      "en": "Someday he will return with a little space kitten...",
+      "tr": "Bir gün küçük bir uzay kedisiyle geri dönecek..."
+    },
+    {
+      "key": "ending_story_3",
+      "ru": "Сможете вырастить его малыша?",
+      "en": "Will you be able to raise his baby?",
+      "tr": "Onun yavrusunu büyütebilecek misiniz?"
+    },
+    {
+      "key": "ending_btn_next",
+      "ru": "Далее",
+      "en": "Next",
+      "tr": "İleri"
+    },
+    {
+      "key": "ending_btn_restart",
+      "ru": "Играть снова",
+      "en": "Play again",
+      "tr": "Tekrar oyna"
+    },
+    {
+      "key": "restart_btn",
+      "ru": "Рестарт",
+      "en": "Restart",
+      "tr": "Yeniden Başlat"
+    },
+    {
+      "key": "exit_btn",
+      "ru": "Выход",
+      "en": "Exit",
+      "tr": "Çıkış"
+    },
+    {
+      "key": "ui_per_second_suffix",
+      "ru": "/сек",
+      "en": "/sec",
+      "tr": "/sn"
+    },
+    {
+      "key": "shop_effect_per_click",
+      "ru": " за клик",
+      "en": " per click",
+      "tr": " tık başına"
+    },
+    {
+      "key": "shop_effect_per_second",
+      "ru": " в секунду",
+      "en": " per second",
+      "tr": " saniye başına"
+    },
+    {
+      "key": "shop_effect_global",
+      "ru": " ко всему",
+      "en": " to everything",
+      "tr": " her şeye"
+    },
+    {
+      "key": "shop_item_yarn_ball",
+      "ru": "Клубочек",
+      "en": "Yarn Ball",
+      "tr": "İplik Yumağı"
+    },
+    {
+      "key": "shop_item_toy",
+      "ru": "Игрушечка",
+      "en": "Cute Toy",
+      "tr": "Sevimli Oyuncak"
+    },
+    {
+      "key": "shop_item_cardboard_house",
+      "ru": "Картонный домик",
+      "en": "Cardboard House",
+      "tr": "Karton Ev"
+    },
+    {
+      "key": "shop_item_fishy_treat",
+      "ru": "Рыбовое",
+      "en": "Fishy Treat",
+      "tr": "Balık Şeysi"
+    },
+    {
+      "key": "shop_item_cool_glasses",
+      "ru": "Крутые очки",
+      "en": "Cool Glasses",
+      "tr": "Havalı Gözlükler"
+    },
+    {
+      "key": "shop_item_laser_pointer",
+      "ru": "Лазерная указка",
+      "en": "Laser Pointer",
+      "tr": "Lazer İşaretçi"
+    },
+    {
+      "key": "shop_item_catnip",
+      "ru": "Кошачья мята",
+      "en": "Catnip",
+      "tr": "Kedi Nanesi"
+    },
+    {
+      "key": "shop_item_can_of_fish",
+      "ru": "Банка рыбов",
+      "en": "Can of Fishies",
+      "tr": "Balık Konservesi"
+    },
+    {
+      "key": "shop_item_cat_house",
+      "ru": "Кошачий домик",
+      "en": "Cat House",
+      "tr": "Kedi Evi"
+    },
+    {
+      "key": "shop_item_royal_pillow",
+      "ru": "Королевская подушка",
+      "en": "Royal Pillow",
+      "tr": "Kraliyet Yastığı"
+    },
+    {
+      "key": "shop_item_goldfish",
+      "ru": "Золотая рыбка",
+      "en": "Goldfish",
+      "tr": "Japon Balığı"
+    },
+    {
+      "key": "shop_item_robot_servant",
+      "ru": "Робот слуга",
+      "en": "Robot Servant",
+      "tr": "Robot Hizmetçi"
+    },
+    {
+      "key": "shop_item_sea_of_fish",
+      "ru": "Море рыбов",
+      "en": "Sea of Fishies",
+      "tr": "Balık Denizi"
+    },
+    {
+      "key": "shop_item_quantum_yarn",
+      "ru": "Квантовый клубок",
+      "en": "Quantum Yarn Ball",
+      "tr": "Kuantum Yumağı"
+    },
+    {
+      "key": "shop_item_moon_crystal",
+      "ru": "Лунный кристалл",
+      "en": "Moon Crystal",
+      "tr": "Ay Kristali"
+    },
+    {
+      "key": "shop_item_own_planet",
+      "ru": "Своя планета",
+      "en": "Own Planet",
+      "tr": "Kendi Gezegenin"
+    }
+  ]
+}

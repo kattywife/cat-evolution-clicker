@@ -69,7 +69,18 @@ public class EndingStoryController : MonoBehaviour
         {
             if (currentIndex < storySentences.Length)
             {
-                storyText.text = storySentences[currentIndex];
+                // Берем ключ из массива
+                string currentKey = storySentences[currentIndex];
+                
+                // Прогоняем его через переводчик и выводим на экран
+                if (LocalizationManager.Instance != null)
+                {
+                    storyText.text = LocalizationManager.Instance.GetTranslation(currentKey);
+                }
+                else
+                {
+                    storyText.text = currentKey; // Подстраховка
+                }
             }
         }
     }

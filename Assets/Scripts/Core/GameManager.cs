@@ -169,8 +169,20 @@ public class GameManager : MonoBehaviour
 
     private void UpdateUITexts(double currentSps)
     {
-        if (totalScoreText) totalScoreText.text = EconomyManager.Instance.FormatNumber(EconomyManager.Instance.score);
-        if (perSecondText) perSecondText.text = $"{EconomyManager.Instance.FormatNumber(currentSps)}/сек";
+        if (totalScoreText) 
+            totalScoreText.text = EconomyManager.Instance.FormatNumber(EconomyManager.Instance.score);
+            
+        if (perSecondText)
+        {
+            // Получаем перевод для суффикса "/сек"
+            string spsSuffix = "/сек";
+            if (LocalizationManager.Instance != null)
+            {
+                spsSuffix = LocalizationManager.Instance.GetTranslation("ui_per_second_suffix");
+            }
+
+            perSecondText.text = $"{EconomyManager.Instance.FormatNumber(currentSps)}{spsSuffix}";
+        }
     }
 
     private void UpdateDoubleScoreTimer()

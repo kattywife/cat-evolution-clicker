@@ -116,30 +116,64 @@ public class UpgradeButtonUI : MonoBehaviour, IPointerEnterHandler, IPointerExit
     {
         if (currentUpgradeData == null) return;
 
-        if (nameText != null) nameText.text = currentUpgradeData.upgradeName;
+        // 1. ПЕРЕВОДИМ НАЗВАНИЕ ТОВАРА
+        // (будет искать ключ, например "shop_item_ball_title", в вашем JSON)
+        if (nameText != null)
+        {
+            nameText.text = LocalizationManager.Instance != null 
+                ? LocalizationManager.Instance.GetTranslation(currentUpgradeData.upgradeName) 
+                : currentUpgradeData.upgradeName;
+        }
+
         if (iconImage != null) iconImage.sprite = currentUpgradeData.icon;
         if (priceText != null) priceText.text = FormatNumber(currentCost);
 
+        // 2. ДИНАМИЧЕСКИ ПЕРЕВОДИМ ЭФФЕКТЫ
         if (effectText != null)
         {
+            string suffix = "";
+            string powerValue = "";
+
             switch (currentUpgradeData.type)
             {
                 case UpgradeType.PerClick:
-                    effectText.text = $"+{FormatNumber(currentUpgradeData.power)} за клик";
+                    powerValue = $"+{FormatNumber(currentUpgradeData.power)}";
+                    suffix = LocalizationManager.Instance != null 
+                        ? LocalizationManager.Instance.GetTranslation("shop_effect_per_click") 
+                        : " за клик";
                     break;
+
                 case UpgradeType.PerSecond:
-                    effectText.text = $"+{FormatNumber(currentUpgradeData.power)} в секунду";
+                    powerValue = $"+{FormatNumber(currentUpgradeData.power)}";
+                    suffix = LocalizationManager.Instance != null 
+                        ? LocalizationManager.Instance.GetTranslation("shop_effect_per_second") 
+                        : " в секунду";
                     break;
+
                 case UpgradeType.ClickMultiplier:
-                    effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% за клик";
+                    powerValue = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}%";
+                    suffix = LocalizationManager.Instance != null 
+                        ? LocalizationManager.Instance.GetTranslation("shop_effect_per_click") 
+                        : " за клик";
                     break;
+
                 case UpgradeType.PassiveMultiplier:
-                    effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% в секунду";
+                    powerValue = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}%";
+                    suffix = LocalizationManager.Instance != null 
+                        ? LocalizationManager.Instance.GetTranslation("shop_effect_per_second") 
+                        : " в секунду";
                     break;
+
                 case UpgradeType.GlobalMultiplier:
-                    effectText.text = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}% ко всему";
+                    powerValue = $"+{(currentUpgradeData.power * 100 - 100).ToString("F0")}%";
+                    suffix = LocalizationManager.Instance != null 
+                        ? LocalizationManager.Instance.GetTranslation("shop_effect_global") 
+                        : " ко всему";
                     break;
             }
+
+            // Собираем число и переведенный текст вместе
+            effectText.text = powerValue + suffix;
         }
     }
 

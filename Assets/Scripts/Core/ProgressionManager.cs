@@ -110,14 +110,29 @@ public class ProgressionManager : MonoBehaviour
     {
         if (levelProgressBar == null) return;
 
+        // Получаем переведенное слово "Уровень" (если переводчик не готов, пишем дефолтное "Уровень")
+        string levelWord = "Уровень";
+        if (LocalizationManager.Instance != null)
+        {
+            levelWord = LocalizationManager.Instance.GetTranslation("ui_level");
+        }
+
         // Если это последний уровень
         if (currentLevelIndex >= levels.Count - 1)
         {
             levelProgressBar.minValue = 0;
             levelProgressBar.maxValue = 1;
             levelProgressBar.value = 1;
-            if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
-            if (progressText) progressText.text = "МАКСИМУМ";
+            
+            if (levelNumberText) levelNumberText.text = $"{levelWord}: {currentLevelIndex + 1}";
+            
+            if (progressText)
+            {
+                string maxWord = LocalizationManager.Instance != null 
+                    ? LocalizationManager.Instance.GetTranslation("ui_max_level") 
+                    : "МАКСИМУМ";
+                progressText.text = maxWord;
+            }
             return;
         }
 
@@ -125,12 +140,12 @@ public class ProgressionManager : MonoBehaviour
         double scoreToReachNext = levels[currentLevelIndex + 1].scoreToReach;
         
         // Настраиваем слайдер
-        levelProgressBar.minValue = 0; // Можно поставить score текущего уровня, если хочешь, чтобы полоска начиналась с 0 каждый раз
+        levelProgressBar.minValue = 0; 
         levelProgressBar.maxValue = (float)scoreToReachNext;
         levelProgressBar.value = (float)currentScore;
 
-        // Обновляем тексты
-        if (levelNumberText) levelNumberText.text = $"Уровень: {currentLevelIndex + 1}";
+        // Обновляем текст уровня
+        if (levelNumberText) levelNumberText.text = $"{levelWord}: {currentLevelIndex + 1}";
         
         if (progressText && EconomyManager.Instance != null)
         {

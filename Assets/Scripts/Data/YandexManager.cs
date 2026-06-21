@@ -8,6 +8,7 @@ public class YandexManager : MonoBehaviour
     public static YandexManager Instance;
     public bool isAdPlaying = false;
     public bool isSdkReady = false; 
+    public string currentLanguage = "rus"; // язык по умолчанию
 
     [DllImport("__Internal")] private static extern void GameReady();
     [DllImport("__Internal")] private static extern void ShowYandexRewardAd();
@@ -70,18 +71,18 @@ public class YandexManager : MonoBehaviour
 
     private void RequestLanguage()
     {
-#if UNITY_WEBGL && !UNITY_EDITOR
+    #if UNITY_WEBGL && !UNITY_EDITOR
         try {
             if (isSdkReady) {
-                string lang = GetLang();
-                Debug.Log("[YandexManager] Detected Language: " + lang);
+                currentLanguage = GetLang(); // «аписываем €зык яндекса (ru, en, tr и т.д.)
+                Debug.Log("[YandexManager] Detected Language: " + currentLanguage);
             }
         } catch (Exception e) {
             Debug.LogError("[YandexManager] Language Request Error: " + e.Message);
         }
-#else
+    #else
         Debug.Log("[YandexManager] Detected Language: ru (Editor)");
-#endif
+    #endif
     }
 
     public void ShowRewardAd()
