@@ -76,13 +76,12 @@ public class ProgressionManager : MonoBehaviour
         // 3. Эффекты
         if (playEffects)
         {
-            
-            // Перемещаем эффект уровня точно в глаза котика (в точку слез)
-            levelUpEffect.transform.localPosition = currentLevel.tearPosition;
-            Debug.Log("точка эффекта равна точке слез");
-
-            levelUpEffect.Play();
-        
+            if (levelUpEffect) 
+            {
+                // Перемещаем эффект уровня в индивидуально настроенную точку для этого уровня!
+                levelUpEffect.transform.localPosition = currentLevel.levelEffectPosition;
+                levelUpEffect.Play();
+            }
 
             if (levelUpSound) AudioManager.Instance.PlaySound(levelUpSound, 0.8f);
             

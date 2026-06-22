@@ -12,4 +12,6 @@ public class LevelData : ScriptableObject
 
     [Tooltip("Координаты слез (X, Y) для этого уровня. Посмотри их в инспекторе, подвигав объект слез.")]
     public Vector2 tearPosition; // <--- НОВОЕ ПОЛЕ
+
+    public Vector2 levelEffectPosition; //координаты левел эффекта
 }

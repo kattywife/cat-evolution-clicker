@@ -114,10 +114,19 @@ public class LocalizationManager : MonoBehaviour
 
         Debug.Log("[LocalizationManager] язык принудительно переключен на: " + activeLanguage);
 
+        // 1. ћгновенно обновл€ем все обычные тексты на сцене
         LocalizeText[] allTexts = FindObjectsByType<LocalizeText>(FindObjectsInactive.Include, FindObjectsSortMode.None);
         foreach (var txt in allTexts)
         {
             txt.Localize(); 
+        }
+
+        // 2. ћ√Ќќ¬≈ЌЌќ ќЅЌќ¬Ћя≈ћ ¬—≈  ј–“ќ„ » ћј√ј«»Ќј!
+        // Ќаходим все кнопки улучшений и заставл€ем их перерисовать тексты на новом €зыке
+        UpgradeButtonUI[] allShopButtons = FindObjectsByType<UpgradeButtonUI>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        foreach (var btn in allShopButtons)
+        {
+            btn.UpdateTextAndIcons();
         }
     }
 
