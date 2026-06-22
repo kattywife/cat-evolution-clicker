@@ -21,6 +21,7 @@ public class GameManager : MonoBehaviour
     public Image catImage;
     public GameObject clickTextPrefab;
     private Vector3 initialCatScale;
+    public ParticleSystem clickStarsEffect; // —сылка на систему частиц звездочек
 
     [Header("«вуки")]
     public AudioClip catClickSound;
