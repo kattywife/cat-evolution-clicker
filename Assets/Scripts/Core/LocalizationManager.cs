@@ -139,4 +139,10 @@ public class LocalizationManager : MonoBehaviour
             default: return item.en;
         }
     }
+
+    // Метод, чтобы узнать текущий активный язык
+    public string GetActiveLanguage()
+    {
+        return activeLanguage;
+    }
 }

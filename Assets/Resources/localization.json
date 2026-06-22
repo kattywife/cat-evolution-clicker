@@ -252,6 +252,12 @@
       "ru": "Своя планета",
       "en": "Own Planet",
       "tr": "Kendi Gezegenin"
+    },
+    {
+      "key": "ui_language_title",
+      "ru": "Язык:",
+      "en": "Language:",
+      "tr": "Dil:"
     }
   ]
 }
